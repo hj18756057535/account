@@ -20,4 +20,9 @@ public class HomeController {
     public String applications() {
         return "applications";
     }
+
+    @GetMapping("/audit-logs")
+    public String auditLogs() {
+        return "audit-logs";
+    }
 }

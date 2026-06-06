@@ -20,4 +20,6 @@ public interface AccountUserMapper {
     List<AccountUser> selectByKeyword(@Param("keyword") String keyword, @Param("status") String status);
 
     void updateStatus(@Param("id") String id, @Param("status") String status);
+
+    void updatePassword(@Param("id") String id, @Param("password") String password);
 }

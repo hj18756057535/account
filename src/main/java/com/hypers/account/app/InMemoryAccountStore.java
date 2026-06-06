@@ -1,7 +1,6 @@
 package com.hypers.account.app;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -140,5 +139,11 @@ public class InMemoryAccountStore implements AccountStore {
                 .filter(u -> u.getAccount().equals(account))
                 .findFirst()
                 .orElse(null);
+    }
+
+    @Override
+    public void setUserPassword(String userId, String encodedPassword) {
+        AccountUser user = requireUser(userId);
+        user.setPassword(encodedPassword);
     }
 }

@@ -1,7 +1,12 @@
 package com.hypers.account.app;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.Instant;
 
+/**
+ * Account Center 统一用户实体。
+ * 不使用 ORM 注解，由 MyBatis resultMap 映射数据库字段。
+ */
 public class AccountUser {
 
     private String id;
@@ -10,6 +15,8 @@ public class AccountUser {
     private String name;
     private String phone;
     private String status;
+    @JsonIgnore
+    private String password;
     private String createdBy;
     private String updatedBy;
     private Instant createdAt;
@@ -83,6 +90,14 @@ public class AccountUser {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 
     public String getCreatedBy() {

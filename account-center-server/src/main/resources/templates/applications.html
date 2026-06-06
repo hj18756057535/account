@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>应用管理 - Account Center</title>
+    <style>
+        :root{--bg:#f6f8fb;--panel:#fff;--line:#d7dde8;--text:#172033;--muted:#647086;--brand:#1f7a6d;--brand-dark:#155f55;--danger:#c0392b;--danger-bg:#fdf0ef;--success:#1a8c6e}
+        *{box-sizing:border-box}
+        body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,"Microsoft YaHei",sans-serif}
+        header{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+        nav{display:flex;gap:14px}nav a{color:var(--brand);text-decoration:none;font-weight:700;font-size:14px}
+        h1{font-size:18px;margin:0}
+        main{display:grid;grid-template-columns:380px minmax(0,1fr);gap:16px;padding:16px;height:calc(100vh - 56px)}
+        section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto}
+        h2{font-size:14px;margin:0 0 10px}
+        label{display:block;color:var(--muted);font-size:12px;margin:8px 0 4px}
+        input{width:100%;min-height:32px;border:1px solid var(--line);border-radius:4px;padding:6px 8px;color:var(--text);background:#fff;font-size:13px}
+        button{min-height:32px;border:0;border-radius:4px;padding:0 12px;background:var(--brand);color:#fff;cursor:pointer;font-weight:700;font-size:13px}
+        button:hover{background:var(--brand-dark)}
+        button.danger{background:var(--danger)}
+        button.secondary{background:var(--muted)}
+        .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+        .status{min-height:36px;margin-top:10px;padding:8px;border:1px solid var(--line);border-radius:4px;color:var(--muted);background:#fbfcff;white-space:pre-wrap;word-break:break-word;font-size:12px}
+        .search-bar{display:flex;gap:8px;margin-bottom:10px}
+        .search-bar input{flex:1}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+        th{color:var(--muted);font-weight:600;font-size:12px;background:#f8f9fb}
+        tr:hover{background:#f0f7f6}
+        tr.active{background:#e6f3f1}
+        .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+        .badge.enabled{background:#e6f7f0;color:#1a8c6e}
+        .badge.disabled{background:var(--danger-bg);color:var(--danger)}
+        .section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+        .detail-field{margin:6px 0;font-size:13px}
+        .detail-field .label{color:var(--muted);font-size:12px;display:inline-block;width:100px}
+        .detail-field .val{word-break:break-all}
+        .secret-box{background:#f8f9fb;border:1px dashed var(--line);border-radius:4px;padding:8px;margin:8px 0;font-size:12px;word-break:break-all;font-family:monospace}
+        @media(max-width:900px){main{grid-template-columns:1fr;height:auto}}
+    </style>
+</head>
+<body>
+<header>
+    <h1>应用管理</h1>
+    <nav><a href="/">首页</a><a href="/users">用户与授权</a></nav>
+</header>
+<main>
+    <section>
+        <div class="section-title">
+            <h2>应用列表</h2>
+            <button onclick="showCreateForm()">+ 新增</button>
+        </div>
+        <div class="search-bar">
+            <input id="searchKeyword" placeholder="搜索编码/名称" onkeyup="searchApps()">
+            <select id="searchStatus" onchange="searchApps()">
+                <option value="">全部状态</option>
+                <option value="enabled">启用</option>
+                <option value="disabled">禁用</option>
+            </select>
+        </div>
+        <table>
+            <thead><tr><th>编码</th><th>名称</th><th>状态</th></tr></thead>
+            <tbody id="appTable"></tbody>
+        </table>
+    </section>
+    <section>
+        <h2 id="detailTitle">应用详情</h2>
+        <div id="detailContent">
+            <p style="color:var(--muted);font-size:13px">请从左侧选择一个应用，或点击"新增"创建新应用</p>
+        </div>
+        <div id="detailStatus" class="status" style="display:none"></div>
+    </section>
+</main>
+<script>
+    let selectedAppCode = null;
+
+    const api = {
+        async get(url) { const r = await fetch(url); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+        async post(url, body) { const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{})}); if (!r.ok) throw new Error(await r.text()); const t = await r.text(); return t ? JSON.parse(t) : null; },
+        async put(url, body) { const r = await fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+    };
+
+    async function searchApps() {
+        const keyword = document.getElementById('searchKeyword').value;
+        const status = document.getElementById('searchStatus').value;
+        let url = '/api/applications?';
+        if (keyword) url += 'keyword=' + encodeURIComponent(keyword) + '&';
+        if (status) url += 'status=' + encodeURIComponent(status);
+        try {
+            const apps = await api.get(url);
+            document.getElementById('appTable').innerHTML = apps.map(a =>
+                '<tr class="' + (a.appCode === selectedAppCode ? 'active' : '') + '" onclick="selectApp(\'' + a.appCode + '\')" style="cursor:pointer">' +
+                '<td>' + a.appCode + '</td><td>' + a.name + '</td>' +
+                '<td><span class="badge ' + a.status + '">' + (a.status === 'enabled' ? '启用' : '禁用') + '</span></td></tr>'
+            ).join('');
+        } catch(e) { console.error(e); }
+    }
+
+    async function selectApp(appCode) {
+        selectedAppCode = appCode;
+        searchApps();
+        try {
+            const app = await api.get('/api/applications/' + encodeURIComponent(appCode));
+            let html = '<div style="display:flex;gap:8px;margin-bottom:12px">';
+            html += '<span class="badge ' + app.status + '">' + (app.status === 'enabled' ? '启用' : '禁用') + '</span>';
+            html += '<span style="color:var(--muted);font-size:12px">密钥版本: ' + (app.secretVersion || 1) + '</span>';
+            html += '</div>';
+            html += '<div class="detail-field"><span class="label">应用编码</span><span class="val">' + app.appCode + '</span></div>';
+            html += '<div class="detail-field"><span class="label">应用名称</span><span class="val">' + app.name + '</span></div>';
+            html += '<div class="detail-field"><span class="label">入口地址</span><span class="val">' + app.entryUrl + '</span></div>';
+            html += '<div class="detail-field"><span class="label">SSO 回调</span><span class="val">' + app.ssoCallbackUrl + '</span></div>';
+            html += '<div class="detail-field"><span class="label">iframe 授权</span><span class="val">' + app.permissionIframeUrl + '</span></div>';
+            html += '<div class="detail-field"><span class="label">通知地址</span><span class="val">' + app.notifyBaseUrl + '</span></div>';
+            html += '<div class="detail-field"><span class="label">默认租户</span><span class="val">' + app.defaultTenantCode + '</span></div>';
+            html += '<div class="actions">';
+            html += '<button onclick="showEditForm()">编辑</button>';
+            if (app.status === 'enabled') {
+                html += '<button class="danger" onclick="disableApp()">禁用</button>';
+            } else {
+                html += '<button onclick="enableApp()" style="background:var(--success)">启用</button>';
+            }
+            html += '<button class="secondary" onclick="rotateSecret()">重置密钥</button>';
+            html += '</div>';
+            document.getElementById('detailContent').innerHTML = html;
+            document.getElementById('detailTitle').textContent = '应用详情 - ' + app.name;
+        } catch(e) { document.getElementById('detailContent').innerHTML = '<p style="color:var(--danger)">' + e.message + '</p>'; }
+    }
+
+    function showCreateForm() {
+        selectedAppCode = null;
+        let html = '<label>应用编码</label><input id="f_appCode" placeholder="如 cms-ai">';
+        html += '<label>应用名称</label><input id="f_name">';
+        html += '<label>入口地址</label><input id="f_entryUrl" value="http://localhost:">';
+        html += '<label>SSO 回调地址</label><input id="f_callbackUrl" value="http://localhost:/account-sso/callback">';
+        html += '<label>iframe 授权页地址</label><input id="f_permissionUrl" value="http://localhost:/account-admin/users/{externalUserId}/permissions">';
+        html += '<label>接口通知地址</label><input id="f_notifyBaseUrl" value="http://localhost:">';
+        html += '<label>应用密钥</label><input id="f_secret" value="' + generateSecret() + '">';
+        html += '<label>默认租户</label><input id="f_tenantCode" value="default">';
+        html += '<div class="actions"><button onclick="saveApp()">保存</button><button class="secondary" onclick="selectApp(selectedAppCode||\'\')">取消</button></div>';
+        document.getElementById('detailContent').innerHTML = html;
+        document.getElementById('detailTitle').textContent = '新增应用';
+    }
+
+    async function showEditForm() {
+        if (!selectedAppCode) return;
+        try {
+            const app = await api.get('/api/applications/' + encodeURIComponent(selectedAppCode));
+            let html = '<label>应用编码</label><input id="f_appCode" value="' + app.appCode + '" readonly style="background:#f0f0f0">';
+            html += '<label>应用名称</label><input id="f_name" value="' + app.name + '">';
+            html += '<label>入口地址</label><input id="f_entryUrl" value="' + app.entryUrl + '">';
+            html += '<label>SSO 回调地址</label><input id="f_callbackUrl" value="' + app.ssoCallbackUrl + '">';
+            html += '<label>iframe 授权页地址</label><input id="f_permissionUrl" value="' + app.permissionIframeUrl + '">';
+            html += '<label>接口通知地址</label><input id="f_notifyBaseUrl" value="' + app.notifyBaseUrl + '">';
+            html += '<label>应用密钥</label><input id="f_secret" value="' + app.secret + '">';
+            html += '<label>默认租户</label><input id="f_tenantCode" value="' + app.defaultTenantCode + '">';
+            html += '<div class="actions"><button onclick="saveApp()">保存</button><button class="secondary" onclick="selectApp(selectedAppCode)">取消</button></div>';
+            document.getElementById('detailContent').innerHTML = html;
+            document.getElementById('detailTitle').textContent = '编辑应用 - ' + app.name;
+        } catch(e) { showStatus(e.message); }
+    }
+
+    async function saveApp() {
+        const body = {
+            appCode: document.getElementById('f_appCode').value,
+            name: document.getElementById('f_name').value,
+            entryUrl: document.getElementById('f_entryUrl').value,
+            ssoCallbackUrl: document.getElementById('f_callbackUrl').value,
+            permissionIframeUrl: document.getElementById('f_permissionUrl').value,
+            notifyBaseUrl: document.getElementById('f_notifyBaseUrl').value,
+            secret: document.getElementById('f_secret').value,
+            defaultTenantCode: document.getElementById('f_tenantCode').value || 'default'
+        };
+        try {
+            const app = await api.post('/api/applications', body);
+            selectedAppCode = app.appCode;
+            searchApps();
+            selectApp(app.appCode);
+            showStatus('应用已保存');
+        } catch(e) { showStatus(e.message); }
+    }
+
+    async function enableApp() {
+        if (!selectedAppCode) return;
+        try { await api.post('/api/applications/' + encodeURIComponent(selectedAppCode) + '/enable'); selectApp(selectedAppCode); searchApps(); }
+        catch(e) { showStatus(e.message); }
+    }
+
+    async function disableApp() {
+        if (!selectedAppCode || !confirm('确定禁用该应用？禁用后不能授权新用户，也不能签发 SSO Code。')) return;
+        try { await api.post('/api/applications/' + encodeURIComponent(selectedAppCode) + '/disable'); selectApp(selectedAppCode); searchApps(); }
+        catch(e) { showStatus(e.message); }
+    }
+
+    async function rotateSecret() {
+        if (!selectedAppCode || !confirm('确定重置密钥？旧密钥将立即失效。')) return;
+        try {
+            const result = await api.post('/api/applications/' + encodeURIComponent(selectedAppCode) + '/secret/rotate');
+            selectApp(selectedAppCode);
+            showStatus('新密钥：' + result.newSecret + '\n（请妥善保存，此密钥不会再次显示）');
+        } catch(e) { showStatus(e.message); }
+    }
+
+    function generateSecret() { return Array.from(crypto.getRandomValues(new Uint8Array(24))).map(b => b.toString(16).padStart(2,'0')).join(''); }
+
+    function showStatus(msg) {
+        const el = document.getElementById('detailStatus');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 8000);
+    }
+
+    (async function init() { await searchApps(); })();
+</script>
+</body>
+</html>

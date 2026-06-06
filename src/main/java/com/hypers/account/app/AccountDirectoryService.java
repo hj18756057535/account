@@ -3,6 +3,10 @@ package com.hypers.account.app;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 用户与应用管理核心服务。
+ * 编排用户 CRUD、应用 CRUD、授权管理和同步通知逻辑。
+ */
 public class AccountDirectoryService {
 
     private final AccountStore store;

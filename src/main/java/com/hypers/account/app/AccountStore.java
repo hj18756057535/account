@@ -2,6 +2,11 @@ package com.hypers.account.app;
 
 import java.util.List;
 
+/**
+ * 数据访问契约接口。
+ * 封装所有持久化操作，Service 层只依赖此接口，不直接调用 Mapper。
+ * 生产使用 MyBatisAccountStore，测试使用 InMemoryAccountStore。
+ */
 public interface AccountStore {
 
     AccountUser saveNewUser(SaveUserCommand command);
@@ -33,4 +38,6 @@ public interface AccountStore {
     void rotateApplicationSecret(String appCode, String newSecret, int newVersion);
 
     AccountUser findUserByAccount(String account);
+
+    void setUserPassword(String userId, String encodedPassword);
 }

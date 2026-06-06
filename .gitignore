@@ -1,4 +1,38 @@
+# 构建产物
 target/
+*.class
+*.jar
+*.war
+
+# IDE
 .idea/
 *.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+*.swp
+*.swo
+
+# 日志
 *.log
+logs/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+
+# Maven
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Flyway 迁移锁（本地开发时生成）
+flyway.conf
+
+# 临时文件
+*.tmp
+*.bak
+*.orig

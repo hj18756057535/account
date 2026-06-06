@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>审计日志 - Account Center</title>
+    <style>
+        :root{--bg:#f6f8fb;--panel:#fff;--line:#d7dde8;--text:#172033;--muted:#647086;--brand:#1f7a6d;--brand-dark:#155f55}
+        *{box-sizing:border-box}
+        body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,"Microsoft YaHei",sans-serif}
+        header{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--line);background:var(--panel)}
+        nav{display:flex;gap:14px}nav a{color:var(--brand);text-decoration:none;font-weight:700;font-size:14px}
+        h1{font-size:18px;margin:0}
+        main{max-width:1200px;margin:0 auto;padding:16px}
+        section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+        h2{font-size:14px;margin:0 0 10px}
+        .search-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+        .search-bar input,.search-bar select{min-height:32px;border:1px solid var(--line);border-radius:4px;padding:6px 8px;font-size:13px}
+        .search-bar input{flex:1;min-width:120px}
+        button{min-height:32px;border:0;border-radius:4px;padding:0 12px;background:var(--brand);color:#fff;cursor:pointer;font-weight:700;font-size:13px}
+        button:hover{background:var(--brand-dark)}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+        th{color:var(--muted);font-weight:600;font-size:12px;background:#f8f9fb}
+        tr:hover{background:#f0f7f6}
+        .empty{color:var(--muted);text-align:center;padding:20px;font-size:13px}
+    </style>
+</head>
+<body>
+<header>
+    <h1>审计日志</h1>
+    <nav><a href="/">首页</a><a href="/users">用户与授权</a><a href="/applications">应用管理</a></nav>
+</header>
+<main>
+    <section>
+        <h2>操作记录</h2>
+        <div class="search-bar">
+            <input id="operatorId" placeholder="操作人 ID">
+            <input id="operationType" placeholder="操作类型">
+            <input id="targetType" placeholder="目标类型">
+            <input id="targetId" placeholder="目标 ID">
+            <button onclick="searchLogs()">查询</button>
+        </div>
+        <table>
+            <thead><tr><th>时间</th><th>操作人</th><th>操作类型</th><th>目标类型</th><th>目标 ID</th><th>详情</th></tr></thead>
+            <tbody id="logTable"><tr><td colspan="6" class="empty">请查询审计日志</td></tr></tbody>
+        </table>
+    </section>
+</main>
+<script>
+    async function searchLogs() {
+        const params = new URLSearchParams();
+        const operatorId = document.getElementById('operatorId').value;
+        const operationType = document.getElementById('operationType').value;
+        const targetType = document.getElementById('targetType').value;
+        const targetId = document.getElementById('targetId').value;
+        if (operatorId) params.set('operatorId', operatorId);
+        if (operationType) params.set('operationType', operationType);
+        if (targetType) params.set('targetType', targetType);
+        if (targetId) params.set('targetId', targetId);
+        try {
+            const r = await fetch('/api/audit-logs?' + params.toString());
+            if (!r.ok) throw new Error(await r.text());
+            const logs = await r.json();
+            const tbody = document.getElementById('logTable');
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">无匹配记录</td></tr>';
+                return;
+            }
+            tbody.innerHTML = logs.map(l =>
+                '<tr><td>' + (l.createdAt || '') + '</td>' +
+                '<td>' + (l.operatorId || '') + '</td>' +
+                '<td>' + (l.operationType || '') + '</td>' +
+                '<td>' + (l.targetType || '') + '</td>' +
+                '<td>' + (l.targetId || '') + '</td>' +
+                '<td>' + (l.detail || '') + '</td></tr>'
+            ).join('');
+        } catch(e) {
+            document.getElementById('logTable').innerHTML = '<tr><td colspan="6" style="color:red">' + e.message + '</td></tr>';
+        }
+    }
+</script>
+</body>
+</html>

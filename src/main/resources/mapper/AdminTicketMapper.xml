@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 管理端 ticket Mapper：用于 iframe 授权页面的短期凭证（60 秒有效期，一次性使用） -->
+<mapper namespace="com.hypers.account.mapper.AdminTicketMapper">
+
+    <!-- 新增 ticket -->
+    <insert id="insert">
+        insert into account_admin_tickets (code, app_code, user_id, purpose, expires_at)
+        values (#{code}, #{appCode}, #{userId}, #{purpose}, #{expiresAt})
+    </insert>
+
+    <!-- 校验 ticket 是否存在且匹配应用编码 -->
+    <select id="selectAppCodeByCode" resultType="string">
+        select app_code from account_admin_tickets
+        where code = #{code} and app_code = #{appCode}
+    </select>
+
+    <!-- 查询 ticket 关联的用户 ID -->
+    <select id="selectUserIdByCode" resultType="string">
+        select user_id from account_admin_tickets
+        where code = #{code}
+    </select>
+
+    <!-- 标记 ticket 已使用（一次性凭证） -->
+    <update id="markUsed">
+        update account_admin_tickets set used_at = current_timestamp where code = #{code}
+    </update>
+
+    <!-- 检查 ticket 是否已被使用 -->
+    <select id="countUsed" resultType="int">
+        select count(*) from account_admin_tickets where code = #{code} and used_at is not null
+    </select>
+
+    <!-- 检查 ticket 是否有效（存在、未过期、匹配应用编码） -->
+    <select id="countValid" resultType="int">
+        select count(*) from account_admin_tickets
+        where code = #{code} and app_code = #{appCode} and expires_at > #{now}
+    </select>
+
+</mapper>

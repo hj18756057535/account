@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 操作审计日志 Mapper -->
+<mapper namespace="com.hypers.account.mapper.AuditLogMapper">
+
+    <resultMap id="auditLogResultMap" type="com.hypers.account.audit.AuditLog">
+        <id property="id" column="id"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="operationType" column="operation_type"/>
+        <result property="targetType" column="target_type"/>
+        <result property="targetId" column="target_id"/>
+        <result property="detail" column="detail"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <!-- 新增审计日志 -->
+    <insert id="insert">
+        insert into account_operation_logs (id, operator_id, operation_type, target_type, target_id, detail)
+        values (#{log.id}, #{log.operatorId}, #{log.operationType}, #{log.targetType}, #{log.targetId}, #{log.detail})
+    </insert>
+
+    <!-- 按条件搜索审计日志，按时间倒序 -->
+    <select id="selectByCondition" resultMap="auditLogResultMap">
+        select id, operator_id, operation_type, target_type, target_id, detail, created_at
+        from account_operation_logs
+        <where>
+            <if test="operatorId != null and operatorId != ''">
+                and operator_id = #{operatorId}
+            </if>
+            <if test="operationType != null and operationType != ''">
+                and operation_type = #{operationType}
+            </if>
+            <if test="targetType != null and targetType != ''">
+                and target_type = #{targetType}
+            </if>
+            <if test="targetId != null and targetId != ''">
+                and target_id = #{targetId}
+            </if>
+        </where>
+        order by created_at desc
+    </select>
+
+</mapper>

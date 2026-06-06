@@ -2,6 +2,10 @@ package com.hypers.account.app;
 
 import java.time.Instant;
 
+/**
+ * Account Center 注册应用实体。
+ * 每个接入 Account Center 的子系统对应一条记录。
+ */
 public class AccountApplication {
 
     private String appCode;

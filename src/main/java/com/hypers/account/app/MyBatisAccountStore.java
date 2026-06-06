@@ -144,4 +144,9 @@ public class MyBatisAccountStore implements AccountStore {
     public AccountUser findUserByAccount(String account) {
         return userMapper.selectByAccount(account);
     }
+
+    @Override
+    public void setUserPassword(String userId, String encodedPassword) {
+        userMapper.updatePassword(userId, encodedPassword);
+    }
 }
