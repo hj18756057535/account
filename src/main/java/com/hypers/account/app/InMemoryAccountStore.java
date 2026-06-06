@@ -1,6 +1,7 @@
 package com.hypers.account.app;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class InMemoryAccountStore implements AccountStore {
 
@@ -29,13 +31,19 @@ public class InMemoryAccountStore implements AccountStore {
 
     @Override
     public AccountUser updateUser(String userId, SaveUserCommand command) {
-        AccountUser user = new AccountUser(userId, command.getAccount(), command.getEmail(), command.getName(), command.getPhone());
+        AccountUser old = usersById.get(userId);
+        String status = old != null ? old.getStatus() : "enabled";
+        AccountUser user = new AccountUser(userId, command.getAccount(), command.getEmail(), command.getName(), command.getPhone(),
+                status, null, null, null, null);
         usersById.put(userId, user);
         return user;
     }
 
     @Override
     public AccountApplication saveApplication(RegisterApplicationCommand command) {
+        String defaultTenantCode = Optional.ofNullable(command.getDefaultTenantCode())
+                .filter(value -> !value.trim().isEmpty())
+                .orElse("default");
         AccountApplication application = new AccountApplication(
                 command.getAppCode(),
                 command.getName(),
@@ -44,7 +52,7 @@ public class InMemoryAccountStore implements AccountStore {
                 command.getPermissionIframeUrl(),
                 command.getNotifyBaseUrl(),
                 command.getSecret(),
-                command.getDefaultTenantCode());
+                defaultTenantCode);
         applicationsByCode.put(application.getAppCode(), application);
         return application;
     }
@@ -83,5 +91,54 @@ public class InMemoryAccountStore implements AccountStore {
     @Override
     public boolean isAuthorized(String userId, String appCode) {
         return authorizedAppsByUserId.computeIfAbsent(userId, ignored -> new HashSet<>()).contains(appCode);
+    }
+
+    @Override
+    public List<AccountUser> findUsers(String keyword, String status) {
+        return usersById.values().stream()
+                .filter(u -> status == null || status.isEmpty() || status.equals(u.getStatus()))
+                .filter(u -> keyword == null || keyword.isEmpty()
+                        || u.getAccount().contains(keyword)
+                        || u.getName().contains(keyword)
+                        || u.getEmail().contains(keyword)
+                        || u.getPhone().contains(keyword))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AccountApplication> findApplications(String keyword, String status) {
+        return applicationsByCode.values().stream()
+                .filter(a -> status == null || status.isEmpty() || status.equals(a.getStatus()))
+                .filter(a -> keyword == null || keyword.isEmpty()
+                        || a.getAppCode().contains(keyword)
+                        || a.getName().contains(keyword))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void updateUserStatus(String userId, String status) {
+        AccountUser user = requireUser(userId);
+        user.setStatus(status);
+    }
+
+    @Override
+    public void updateApplicationStatus(String appCode, String status) {
+        AccountApplication app = requireApplication(appCode);
+        app.setStatus(status);
+    }
+
+    @Override
+    public void rotateApplicationSecret(String appCode, String newSecret, int newVersion) {
+        AccountApplication app = requireApplication(appCode);
+        app.setSecret(newSecret);
+        app.setSecretVersion(newVersion);
+    }
+
+    @Override
+    public AccountUser findUserByAccount(String account) {
+        return usersById.values().stream()
+                .filter(u -> u.getAccount().equals(account))
+                .findFirst()
+                .orElse(null);
     }
 }

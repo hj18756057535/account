@@ -4,15 +4,17 @@ import com.hypers.account.app.AccountDirectoryService;
 import com.hypers.account.app.AccountStore;
 import com.hypers.account.app.ApplicationUserSyncClient;
 import com.hypers.account.app.InMemoryAccountStore;
-import com.hypers.account.app.JdbcAccountStore;
+import com.hypers.account.app.MyBatisAccountStore;
 import com.hypers.account.app.NoopApplicationUserSyncClient;
+import com.hypers.account.mapper.AccountApplicationMapper;
+import com.hypers.account.mapper.AccountUserApplicationMapper;
+import com.hypers.account.mapper.AccountUserMapper;
 import com.hypers.account.sso.SsoTicketService;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration
 public class AccountCenterConfiguration {
@@ -29,9 +31,11 @@ public class AccountCenterConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "account.store.type", havingValue = "jdbc", matchIfMissing = true)
-    public AccountStore jdbcAccountStore(JdbcTemplate jdbcTemplate) {
-        return new JdbcAccountStore(jdbcTemplate);
+    @ConditionalOnProperty(name = "account.store.type", havingValue = "mybatis", matchIfMissing = true)
+    public AccountStore myBatisAccountStore(AccountUserMapper userMapper,
+                                            AccountApplicationMapper applicationMapper,
+                                            AccountUserApplicationMapper userApplicationMapper) {
+        return new MyBatisAccountStore(userMapper, applicationMapper, userApplicationMapper);
     }
 
     @Bean

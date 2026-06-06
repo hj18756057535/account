@@ -1,5 +1,8 @@
 package com.hypers.account.app;
 
+import java.util.List;
+import java.util.UUID;
+
 public class AccountDirectoryService {
 
     private final AccountStore store;
@@ -41,6 +44,9 @@ public class AccountDirectoryService {
     public void authorize(String userId, String appCode) {
         AccountUser user = store.requireUser(userId);
         AccountApplication application = store.requireApplication(appCode);
+        if ("disabled".equals(application.getStatus())) {
+            throw new IllegalArgumentException("application is disabled");
+        }
         store.authorize(userId, appCode);
         syncClient.upsert(application, user);
     }
@@ -50,5 +56,58 @@ public class AccountDirectoryService {
         AccountApplication application = store.requireApplication(appCode);
         store.deauthorize(userId, appCode);
         syncClient.disable(application, user);
+    }
+
+    public List<AccountUser> findUsers(String keyword, String status) {
+        return store.findUsers(keyword, status);
+    }
+
+    public List<AccountApplication> findApplications(String keyword, String status) {
+        return store.findApplications(keyword, status);
+    }
+
+    public List<AccountApplication> getUserAuthorizedApplications(String userId) {
+        store.requireUser(userId);
+        return store.findAuthorizedApplications(userId);
+    }
+
+    public AccountUser updateUserFields(String userId, SaveUserCommand command) {
+        return store.updateUser(userId, command);
+    }
+
+    public void enableUser(String userId) {
+        store.requireUser(userId);
+        store.updateUserStatus(userId, "enabled");
+    }
+
+    public void disableUser(String userId) {
+        AccountUser user = store.requireUser(userId);
+        store.updateUserStatus(userId, "disabled");
+        for (AccountApplication app : store.findAuthorizedApplications(userId)) {
+            syncClient.disable(app, user);
+        }
+    }
+
+    public AccountApplication updateApplication(String appCode, RegisterApplicationCommand command) {
+        store.requireApplication(appCode);
+        return store.saveApplication(command);
+    }
+
+    public void enableApplication(String appCode) {
+        store.requireApplication(appCode);
+        store.updateApplicationStatus(appCode, "enabled");
+    }
+
+    public void disableApplication(String appCode) {
+        store.requireApplication(appCode);
+        store.updateApplicationStatus(appCode, "disabled");
+    }
+
+    public String rotateApplicationSecret(String appCode) {
+        AccountApplication app = store.requireApplication(appCode);
+        String newSecret = UUID.randomUUID().toString().replace("-", "");
+        int newVersion = (app.getSecretVersion() != null ? app.getSecretVersion() : 0) + 1;
+        store.rotateApplicationSecret(appCode, newSecret, newVersion);
+        return newSecret;
     }
 }

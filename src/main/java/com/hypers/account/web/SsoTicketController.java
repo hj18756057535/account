@@ -26,11 +26,17 @@ public class SsoTicketController {
 
     @PostMapping("/api/sso/tickets")
     public IssueTicketResponse issueTicket(@Valid @RequestBody IssueTicketRequest request) {
+        AccountUser user = directoryService.getUser(request.getUserId());
+        if ("disabled".equals(user.getStatus())) {
+            throw new IllegalArgumentException("user is disabled");
+        }
+        AccountApplication application = directoryService.getApplication(request.getAppCode());
+        if ("disabled".equals(application.getStatus())) {
+            throw new IllegalArgumentException("application is disabled");
+        }
         if (!directoryService.isAuthorized(request.getUserId(), request.getAppCode())) {
             throw new IllegalArgumentException("user is not authorized for application");
         }
-        AccountUser user = directoryService.getUser(request.getUserId());
-        AccountApplication application = directoryService.getApplication(request.getAppCode());
         String code = ticketService.issue(application.getAppCode(), new AccountUserSnapshot(
                 user.getId(),
                 user.getAccount(),

@@ -21,4 +21,16 @@ public interface AccountStore {
     List<AccountApplication> findAuthorizedApplications(String userId);
 
     boolean isAuthorized(String userId, String appCode);
+
+    List<AccountUser> findUsers(String keyword, String status);
+
+    List<AccountApplication> findApplications(String keyword, String status);
+
+    void updateUserStatus(String userId, String status);
+
+    void updateApplicationStatus(String appCode, String status);
+
+    void rotateApplicationSecret(String appCode, String newSecret, int newVersion);
+
+    AccountUser findUserByAccount(String account);
 }

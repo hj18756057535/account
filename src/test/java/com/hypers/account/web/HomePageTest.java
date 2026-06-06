@@ -10,9 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Transactional
 class HomePageTest {
 
     @Autowired
@@ -32,16 +34,15 @@ class HomePageTest {
         mockMvc.perform(get("/users"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("用户与授权")))
-                .andExpect(content().string(containsString("应用准入授权")))
+                .andExpect(content().string(containsString("用户列表")))
                 .andExpect(content().string(containsString("iframe")));
     }
 
     @Test
-    void applicationsPageContainsOnlyApplicationManagementWorkspace() throws Exception {
+    void applicationsPageContainsApplicationListAndManagement() throws Exception {
         mockMvc.perform(get("/applications"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("应用管理")))
-                .andExpect(content().string(containsString("保存应用")))
-                .andExpect(content().string(containsString("default")));
+                .andExpect(content().string(containsString("应用列表")));
     }
 }
