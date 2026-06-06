@@ -1,0 +1,19 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: account-center
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${ACCOUNT_DB_URL:jdbc:postgresql://localhost:5432/account_center}
+    username: ${ACCOUNT_DB_USERNAME:account}
+    password: ${ACCOUNT_DB_PASSWORD:account}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+
+account:
+  store:
+    type: jdbc

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>应用管理 - Account Center</title>
+    <style>
+        :root {
+            --bg: #f6f8fb;
+            --panel: #ffffff;
+            --line: #d7dde8;
+            --text: #172033;
+            --muted: #647086;
+            --brand: #1f7a6d;
+            --brand-dark: #155f55;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, "Microsoft YaHei", sans-serif;
+            letter-spacing: 0;
+        }
+
+        header {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+
+        nav {
+            display: flex;
+            gap: 14px;
+        }
+
+        nav a {
+            color: var(--brand);
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0;
+        }
+
+        main {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        section {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 18px;
+        }
+
+        h2 {
+            font-size: 15px;
+            margin: 0 0 14px;
+        }
+
+        label {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            margin: 12px 0 6px;
+        }
+
+        input {
+            width: 100%;
+            min-height: 36px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 8px 10px;
+            color: var(--text);
+            background: #fff;
+        }
+
+        button {
+            min-height: 36px;
+            border: 0;
+            border-radius: 6px;
+            padding: 0 12px;
+            background: var(--brand);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        button:hover {
+            background: var(--brand-dark);
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .status {
+            min-height: 42px;
+            margin-top: 16px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            color: var(--muted);
+            background: #fbfcff;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>应用管理</h1>
+    <nav>
+        <a href="/">首页</a>
+        <a href="/users">用户与授权</a>
+    </nav>
+</header>
+<main>
+    <section>
+        <h2>应用接入配置</h2>
+        <label for="appCode">应用编码</label>
+        <input id="appCode" value="cms-ai">
+        <label for="appName">应用名称</label>
+        <input id="appName" value="双碳服务">
+        <label for="entryUrl">入口地址</label>
+        <input id="entryUrl" value="http://localhost:9003">
+        <label for="callbackUrl">SSO 回调地址</label>
+        <input id="callbackUrl" value="http://localhost:9003/account-sso/callback">
+        <label for="permissionUrl">iframe 授权页地址</label>
+        <input id="permissionUrl" value="http://localhost:9003/account-admin/users/{externalUserId}/permissions">
+        <label for="notifyBaseUrl">接口通知地址</label>
+        <input id="notifyBaseUrl" value="http://localhost:9003">
+        <label for="secret">应用密钥</label>
+        <input id="secret" value="secret">
+        <label for="tenantCode">默认租户</label>
+        <input id="tenantCode" value="default">
+        <div class="actions">
+            <button id="registerApp">保存应用</button>
+        </div>
+        <div id="status" class="status"></div>
+    </section>
+</main>
+<script>
+    const statusBox = document.getElementById('status');
+    const value = (id) => document.getElementById(id).value;
+    const setStatus = (message) => statusBox.textContent = message;
+
+    async function postJson(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            throw new Error(await response.text() || response.statusText);
+        }
+        const text = await response.text();
+        return text ? JSON.parse(text) : null;
+    }
+
+    document.getElementById('registerApp').onclick = async () => {
+        try {
+            const app = await postJson('/api/applications', {
+                appCode: value('appCode'),
+                name: value('appName'),
+                entryUrl: value('entryUrl'),
+                ssoCallbackUrl: value('callbackUrl'),
+                permissionIframeUrl: value('permissionUrl'),
+                notifyBaseUrl: value('notifyBaseUrl'),
+                secret: value('secret'),
+                defaultTenantCode: value('tenantCode') || 'default'
+            });
+            setStatus('应用已保存：' + JSON.stringify(app, null, 2));
+        } catch (error) {
+            setStatus(error.message);
+        }
+    };
+</script>
+</body>
+</html>
