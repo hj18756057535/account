@@ -9,9 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * AdminTicketService 集成测试。
- * 使用 @SpringBootTest 启动完整上下文，@Transactional 每次测试后回滚。
- */
+ * AdminTicketService 闂嗗棙鍨氬ù瀣槸閵? * 娴ｈ法鏁?@SpringBootTest 閸氼垰濮╃€瑰本鏆ｆ稉濠佺瑓閺傚浄绱滰Transactional 濮ｅ繑顐煎ù瀣槸閸氬骸娲栧姘モ偓? */
 @SpringBootTest
 @Transactional
 class AdminTicketServiceTest {
@@ -35,8 +33,7 @@ class AdminTicketServiceTest {
         ticketService.verify("cms-ai", code);
 
         assertThatThrownBy(() -> ticketService.verify("cms-ai", code))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("已");
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

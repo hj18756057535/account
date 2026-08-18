@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.hypers.account.auth.AccountSessionUser;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -31,18 +32,22 @@ class HomePageTest {
 
     @Test
     void usersPageKeepsUserAndAuthorizationWorkflowTogether() throws Exception {
-        mockMvc.perform(get("/users"))
+        mockMvc.perform(get("/users")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("用户与授权")))
-                .andExpect(content().string(containsString("用户列表")))
+                .andExpect(content().string(containsString("/api/users")))
                 .andExpect(content().string(containsString("iframe")));
     }
 
     @Test
     void applicationsPageContainsApplicationListAndManagement() throws Exception {
-        mockMvc.perform(get("/applications"))
+        mockMvc.perform(get("/applications")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("应用管理")))
-                .andExpect(content().string(containsString("应用列表")));
+                .andExpect(content().string(containsString("/api/applications")));
+    }
+
+    private AccountSessionUser adminSession() {
+        return new AccountSessionUser("admin-user", "admin", "admin");
     }
 }

@@ -8,10 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hypers.account.auth.AccountSessionUser;
+import com.hypers.account.security.HmacSignatureService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -28,92 +31,102 @@ class AccountApiIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private HmacSignatureService signatureService;
+
     @Test
     void fullUserAndApplicationCrudFlow() throws Exception {
-        // Create application
+        String applicationBody = "{\"appCode\":\"cms-ai\",\"name\":\"Carbon Service\",\"entryUrl\":\"http://localhost:9003\",\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\",\"permissionIframeUrl\":\"http://localhost:9003/account-admin/users/{externalUserId}/permissions\",\"notifyBaseUrl\":\"http://localhost:9003\",\"secret\":\"secret\",\"defaultTenantCode\":\"default\"}";
+
         mockMvc.perform(post("/api/applications")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"appCode\":\"cms-ai\",\"name\":\"双碳服务\",\"entryUrl\":\"http://localhost:9003\",\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\",\"permissionIframeUrl\":\"http://localhost:9003/account-admin/users/{externalUserId}/permissions\",\"notifyBaseUrl\":\"http://localhost:9003\",\"secret\":\"secret\",\"defaultTenantCode\":\"default\"}"))
+                        .content(applicationBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.appCode").value("cms-ai"))
                 .andExpect(jsonPath("$.status").value("enabled"))
-                .andExpect(jsonPath("$.secretVersion").value(1));
+                .andExpect(jsonPath("$.secretVersion").value(1))
+                .andExpect(jsonPath("$.secret").doesNotExist());
 
-        // Get application
-        mockMvc.perform(get("/api/applications/cms-ai"))
+        mockMvc.perform(get("/api/applications/cms-ai")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("双碳服务"));
+                .andExpect(jsonPath("$.name").value("Carbon Service"))
+                .andExpect(jsonPath("$.secret").doesNotExist());
 
-        // Search applications
-        mockMvc.perform(get("/api/applications?keyword=cms"))
+        mockMvc.perform(get("/api/applications?keyword=cms")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].appCode").value("cms-ai"));
+                .andExpect(jsonPath("$[0].appCode").value("cms-ai"))
+                .andExpect(jsonPath("$[0].secret").doesNotExist());
 
-        // Update application
+        String updatedApplicationBody = applicationBody.replace("Carbon Service", "Carbon Service v2");
         mockMvc.perform(put("/api/applications/cms-ai")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"appCode\":\"cms-ai\",\"name\":\"双碳服务v2\",\"entryUrl\":\"http://localhost:9003\",\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\",\"permissionIframeUrl\":\"http://localhost:9003/account-admin/users/{externalUserId}/permissions\",\"notifyBaseUrl\":\"http://localhost:9003\",\"secret\":\"secret\",\"defaultTenantCode\":\"default\"}"))
+                        .content(updatedApplicationBody))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("双碳服务v2"));
+                .andExpect(jsonPath("$.name").value("Carbon Service v2"));
 
-        // Disable application
-        mockMvc.perform(post("/api/applications/cms-ai/disable"))
+        mockMvc.perform(post("/api/applications/cms-ai/disable")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/applications/cms-ai"))
+        mockMvc.perform(get("/api/applications/cms-ai")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("disabled"));
 
-        // Enable application
-        mockMvc.perform(post("/api/applications/cms-ai/enable"))
+        mockMvc.perform(post("/api/applications/cms-ai/enable")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isNoContent());
 
-        // Rotate secret
-        MvcResult rotateResult = mockMvc.perform(post("/api/applications/cms-ai/secret/rotate"))
+        MvcResult rotateResult = mockMvc.perform(post("/api/applications/cms-ai/secret/rotate")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.newSecret").isNotEmpty())
                 .andReturn();
         String newSecret = objectMapper.readTree(rotateResult.getResponse().getContentAsString()).get("newSecret").asText();
         assertThat(newSecret).isNotEqualTo("secret");
 
-        // Create user
         MvcResult userResult = mockMvc.perform(post("/api/users")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"account\":\"zhangsan\",\"email\":\"zhangsan@example.com\",\"name\":\"张三\",\"phone\":\"13800000000\"}"))
+                        .content("{\"account\":\"zhangsan\",\"email\":\"zhangsan@example.com\",\"name\":\"Zhang San\",\"phone\":\"13800000000\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.account").value("zhangsan"))
                 .andExpect(jsonPath("$.status").value("enabled"))
                 .andReturn();
         String userId = objectMapper.readTree(userResult.getResponse().getContentAsString()).get("id").asText();
 
-        // Get user
-        mockMvc.perform(get("/api/users/" + userId))
+        mockMvc.perform(get("/api/users/" + userId)
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("zhangsan@example.com"));
 
-        // Search users
-        mockMvc.perform(get("/api/users?keyword=zhang"))
+        mockMvc.perform(get("/api/users?keyword=zhang")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].account").value("zhangsan"));
 
-        // Update user
         mockMvc.perform(put("/api/users/" + userId)
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"account\":\"zhangsan\",\"email\":\"new@example.com\",\"name\":\"张三三\",\"phone\":\"13800000000\"}"))
+                        .content("{\"account\":\"zhangsan\",\"email\":\"new@example.com\",\"name\":\"Zhang San Updated\",\"phone\":\"13800000000\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("new@example.com"));
 
-        // Authorize user
-        mockMvc.perform(post("/api/users/{userId}/applications/{appCode}/authorize", userId, "cms-ai"))
+        mockMvc.perform(post("/api/users/{userId}/applications/{appCode}/authorize", userId, "cms-ai")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isNoContent());
 
-        // Get user's authorized applications
-        mockMvc.perform(get("/api/users/" + userId + "/applications"))
+        mockMvc.perform(get("/api/users/" + userId + "/applications")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].appCode").value("cms-ai"));
 
-        // Issue SSO ticket
         MvcResult ticketResult = mockMvc.perform(post("/api/sso/tickets")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":\"" + userId + "\",\"appCode\":\"cms-ai\"}"))
                 .andExpect(status().isOk())
@@ -121,41 +134,60 @@ class AccountApiIntegrationTest {
                 .andReturn();
         String code = objectMapper.readTree(ticketResult.getResponse().getContentAsString()).get("code").asText();
 
-        // Exchange ticket
+        String exchangeBody = "{\"appCode\":\"cms-ai\",\"code\":\"" + code + "\"}";
         MvcResult exchangeResult = mockMvc.perform(post("/openapi/sso/tickets/exchange")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"appCode\":\"cms-ai\",\"code\":\"" + code + "\"}"))
+                        .headers(signedHeaders("cms-ai", newSecret, "/openapi/sso/tickets/exchange", exchangeBody))
+                        .content(exchangeBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.account").value("zhangsan"))
                 .andExpect(jsonPath("$.tenantCode").value("default"))
                 .andReturn();
-
         assertThat(exchangeResult.getResponse().getContentAsString()).contains("new@example.com");
 
-        // Disable user
-        mockMvc.perform(post("/api/users/" + userId + "/disable"))
+        mockMvc.perform(post("/api/users/" + userId + "/disable")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/users/" + userId))
+        mockMvc.perform(get("/api/users/" + userId)
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("disabled"));
 
-        // Disabled user cannot get SSO ticket
         mockMvc.perform(post("/api/sso/tickets")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":\"" + userId + "\",\"appCode\":\"cms-ai\"}"))
                 .andExpect(status().isBadRequest());
 
-        // Enable user
-        mockMvc.perform(post("/api/users/" + userId + "/enable"))
+        mockMvc.perform(post("/api/users/" + userId + "/enable")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isNoContent());
 
-        // Deauthorize
-        mockMvc.perform(post("/api/users/{userId}/applications/{appCode}/deauthorize", userId, "cms-ai"))
+        mockMvc.perform(post("/api/users/{userId}/applications/{appCode}/deauthorize", userId, "cms-ai")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/users/" + userId + "/applications"))
+        mockMvc.perform(get("/api/users/" + userId + "/applications")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
+    }
+
+    private AccountSessionUser adminSession() {
+        return new AccountSessionUser("admin-user", "admin", "admin");
+    }
+
+    private HttpHeaders signedHeaders(String appCode, String secret, String path, String body) {
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String nonce = "nonce-" + System.nanoTime();
+        String signText = "POST\n" + path + "\n" + timestamp + "\n" + nonce + "\n" + body;
+        String signature = signatureService.sign(signText, secret);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Account-App-Code", appCode);
+        headers.add("X-Account-Timestamp", timestamp);
+        headers.add("X-Account-Nonce", nonce);
+        headers.add("X-Account-Signature", signature);
+        return headers;
     }
 }

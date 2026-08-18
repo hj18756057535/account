@@ -1,0 +1,63 @@
+package com.hypers.account.web;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hypers.account.app.AccountApplication;
+import com.hypers.account.app.AccountDirectoryService;
+import com.hypers.account.app.AccountUser;
+import java.io.IOException;
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+public class AdminTicketIssueValidationFilter extends OncePerRequestFilter {
+
+    private final AccountDirectoryService directoryService;
+    private final ObjectMapper objectMapper;
+
+    public AdminTicketIssueValidationFilter(AccountDirectoryService directoryService, ObjectMapper objectMapper) {
+        this.directoryService = directoryService;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute(AuthController.SESSION_USER_KEY) == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        byte[] bodyBytes = request.getInputStream().readAllBytes();
+        CachedBodyHttpServletRequest wrapped = new CachedBodyHttpServletRequest(request, bodyBytes);
+        try {
+            JsonNode json = objectMapper.readTree(wrapped.getCachedBodyAsString());
+            String appCode = required(json, "appCode");
+            String userId = required(json, "userId");
+            AccountApplication application = directoryService.getApplication(appCode);
+            AccountUser user = directoryService.getUser(userId);
+            if ("disabled".equals(application.getStatus())
+                    || "disabled".equals(user.getStatus())
+                    || !directoryService.isAuthorized(userId, appCode)) {
+                response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+                return;
+            }
+        } catch (IllegalArgumentException e) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+        filterChain.doFilter(wrapped, response);
+    }
+
+    private String required(JsonNode json, String field) {
+        JsonNode value = json.get(field);
+        if (value == null || value.asText().trim().isEmpty()) {
+            throw new IllegalArgumentException(field + " is required");
+        }
+        return value.asText();
+    }
+}
