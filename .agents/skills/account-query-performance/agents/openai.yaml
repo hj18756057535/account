@@ -1,0 +1,4 @@
+interface:
+  display_name: "Account 查询性能规则"
+  short_description: "诊断 Account 的慢查询、N+1、批量查询和集合映射"
+  default_prompt: "使用 $account-query-performance 优化 Account Center 的数据访问性能。"

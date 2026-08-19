@@ -1,0 +1,4 @@
+interface:
+  display_name: "Account 数据库规则"
+  short_description: "治理 Account 的 Flyway、Mapper XML、字段和索引变更"
+  default_prompt: "使用 $account-database-rules 设计并验证 Account Center 的数据库变更。"

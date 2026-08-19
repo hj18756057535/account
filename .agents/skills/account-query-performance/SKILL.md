@@ -1,9 +1,9 @@
 ---
 name: account-query-performance
-description: Use when optimizing slow MyBatis queries, removing N+1 database access, replacing loop queries with batch queries, or reviewing code that accesses the database in loops by user ID, app code, or other collection inputs in the account-center project.
+description: 在 Account Center 仓库中诊断或优化 MyBatis 慢查询、N+1、循环查库、批量查询和集合映射时使用。
 ---
 
-# Account Center Query Performance
+# Account Center 查询性能规则
 
 本 Skill 用于查询性能优化，尤其是 MyBatis Mapper 中的 N+1、循环查库和批量映射问题。
 
@@ -137,3 +137,4 @@ XML 中 `<foreach>` 对空集合会生成 `WHERE id IN ()`，这在 PostgreSQL �
 - [ ] `InMemoryAccountStore` 和 `MyBatisAccountStore` 中新增的批量方法行为一致。
 - [ ] XML 中 `<foreach>` 语法正确，参数类型匹配。
 - [ ] 受影响模块编译或测试已执行；若无法执行，说明原因。
+

@@ -1,9 +1,9 @@
 ---
 name: account-database-rules
-description: Use when creating or modifying database tables, fields, indexes, Mapper XML SQL, Flyway migration scripts, or any change that affects schema compatibility in the account-center project.
+description: 在 Account Center 仓库中新增或修改表、字段、索引、Mapper XML、Flyway 迁移或其他影响数据库兼容性的内容时使用。
 ---
 
-# Account Center Database Rules
+# Account Center 数据库规则
 
 本 Skill 用于数据库、SQL、Mapper XML 和 Flyway 迁移脚本相关改动。
 
@@ -112,3 +112,4 @@ CREATE INDEX idx_operation_logs_created ON account_operation_logs (created_at);
 - [ ] 索引和唯一键有业务依据。
 - [ ] 无敏感信息。
 - [ ] 受影响模块可编译，或已说明无法编译原因。
+

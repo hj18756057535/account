@@ -1,0 +1,4 @@
+interface:
+  display_name: "Account Java 代码规则"
+  short_description: "按 Account 分层、Store 模式和安全约束实现 Java 改动"
+  default_prompt: "使用 $account-code-rules 在 Account Center 中实现已批准的 Java 代码切片。"

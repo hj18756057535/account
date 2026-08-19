@@ -1,9 +1,9 @@
 ---
 name: account-code-rules
-description: Use when generating or modifying Java code in this repository, including Entity, Command, DTO, Service, Store, Controller, Mapper, domain objects, SSO components, or any business logic in the account-center project.
+description: 在 Account Center 仓库中生成或修改 Java 代码时使用，包括领域对象、Command、DTO、Service、Store、Controller、Mapper、SSO、安全组件和业务逻辑。
 ---
 
-# Account Center Code Rules
+# Account Center Java 代码规则
 
 本 Skill 是仓库 Java 代码修改入口。读取后先判断包归属和既有模式，再按下列清单执行。详细架构以根目录 `AGENTS.md` 为准。
 
@@ -17,8 +17,8 @@ description: Use when generating or modifying Java code in this repository, incl
 
 需要更具体规则时：
 
-- 数据库、SQL、Flyway 迁移、Mapper XML 变更：使用 `.agent/skills/account-database-rules`。
-- 慢查询、N+1、循环查库、批量查询优化：使用 `.agent/skills/account-query-performance`。
+- 数据库、SQL、Flyway 迁移、Mapper XML 变更：使用 `.agents/skills/account-database-rules`。
+- 慢查询、N+1、循环查库、批量查询优化：使用 `.agents/skills/account-query-performance`。
 
 ## 项目分层
 
@@ -183,3 +183,4 @@ public class SaveUserCommand {
 - [ ] 密钥等敏感信息未暴露在日志或响应中。
 - [ ] 复杂逻辑有必要的功能注释。
 - [ ] 执行受影响模块构建；若需跑测试，使用 `mvn test`。
+

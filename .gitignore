@@ -36,3 +36,6 @@ flyway.conf
 *.tmp
 *.bak
 *.orig
+
+# 本机 AI 工具适配；规范正文只提交 .agents/skills
+.claude/

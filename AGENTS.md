@@ -59,7 +59,7 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 ## Java 代码硬规则
 
-生成或修改 Controller、Service、Store、Mapper、Entity、DTO、Command 等 Java 代码时，必须参考 `.agent/skills/account-code-rules/SKILL.md`。
+生成或修改 Controller、Service、Store、Mapper、Entity、DTO、Command 等 Java 代码时，必须参考 `.agents/skills/account-code-rules/SKILL.md`。
 
 高频底线：
 - 依赖注入使用构造器注入（项目统一风格），不使用 `@Autowired` 或 `@Resource` 注解。
@@ -76,12 +76,11 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 | Skill | 必须使用场景 |
 | --- | --- |
-| `.agent/skills/account-code-rules` | 生成或修改 Java 代码，包括 Entity、Command、DTO、Service、Store、Controller、Mapper。 |
-| `.agent/skills/account-database-rules` | 新增或修改表、字段、索引、Mapper XML SQL、Flyway 迁移脚本。 |
-| `.agent/skills/account-query-performance` | 优化慢查询、N+1、循环查库、批量查询或集合映射。 |
-| `.agent/skills/doc-to-markdown` | Word、PDF、图片、Office 文档转换为 Markdown。 |
+| `.agents/skills/account-code-rules` | 生成或修改 Java 代码，包括 Entity、Command、DTO、Service、Store、Controller、Mapper。 |
+| `.agents/skills/account-database-rules` | 新增或修改表、字段、索引、Mapper XML SQL、Flyway 迁移脚本。 |
+| `.agents/skills/account-query-performance` | 优化慢查询、N+1、循环查库、批量查询或集合映射。 |
 
-如果本地 Skill 与仓库文档重叠，以更具体、更贴近当前任务的规则为准；如果冲突，先说明冲突并选择风险更低的做法。
+`.agents/skills` 是本仓库 Account 专属 Skill 的唯一规范源；`.claude/skills` 只允许使用本地 Junction 适配，不维护正文副本。如果本地 Skill 与仓库文档重叠，以更具体、更贴近当前任务的规则为准；如果冲突，先说明冲突并选择风险更低的做法。
 
 ## 数据库与部署
 
