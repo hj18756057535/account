@@ -13,9 +13,11 @@ import com.hypers.account.app.AccountUser;
 import com.hypers.account.app.RegisterApplicationCommand;
 import com.hypers.account.app.SaveUserCommand;
 import com.hypers.account.auth.AccountSessionUser;
+import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.security.HmacSignatureService;
 import com.hypers.account.sso.AccountUserSnapshot;
 import com.hypers.account.sso.SsoTicketService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -41,12 +43,30 @@ class SecurityRegressionTest {
     @Autowired
     private HmacSignatureService signatureService;
 
+    @Autowired
+    private AdminRoleMapper adminRoleMapper;
+
+    @BeforeEach
+    void grantAdminRole() {
+        adminRoleMapper.insert("admin-user", "ACCOUNT_ADMIN");
+    }
+
     @Test
     void managementApiRejectsAnonymousRequests() throws Exception {
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"account\":\"anon\",\"email\":\"anon@example.com\",\"name\":\"匿名\",\"phone\":\"13800000000\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void managementApiRejectsSessionWithoutAdminRole() throws Exception {
+        mockMvc.perform(post("/api/users")
+                        .sessionAttr(AuthController.SESSION_USER_KEY,
+                                new AccountSessionUser("normal-user", "normal", "普通用户"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"account\":\"normal\",\"email\":\"normal@example.com\",\"name\":\"普通用户\",\"phone\":\"13800000000\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -59,6 +79,15 @@ class SecurityRegressionTest {
                 .andExpect(jsonPath("$.appCode").value("secret-app"))
                 .andExpect(jsonPath("$.secret").doesNotExist())
                 .andExpect(content().string(not(org.hamcrest.Matchers.containsString("super-secret"))));
+    }
+
+    @Test
+    void applicationRegistrationRejectsUnsupportedUrlScheme() throws Exception {
+        mockMvc.perform(post("/api/applications")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appCode\":\"bad-url-app\",\"name\":\"URL 应用\",\"entryUrl\":\"http://example.com\",\"ssoCallbackUrl\":\"http://example.com/callback\",\"permissionIframeUrl\":\"http://example.com/permissions\",\"notifyBaseUrl\":\"file:///etc/passwd\",\"secret\":\"super-secret\",\"defaultTenantCode\":\"default\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

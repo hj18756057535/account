@@ -9,7 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.auth.AccountSessionUser;
+import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.security.HmacSignatureService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -33,6 +35,14 @@ class AccountApiIntegrationTest {
 
     @Autowired
     private HmacSignatureService signatureService;
+
+    @Autowired
+    private AdminRoleMapper adminRoleMapper;
+
+    @BeforeEach
+    void grantAdminRole() {
+        adminRoleMapper.insert("admin-user", "ACCOUNT_ADMIN");
+    }
 
     @Test
     void fullUserAndApplicationCrudFlow() throws Exception {

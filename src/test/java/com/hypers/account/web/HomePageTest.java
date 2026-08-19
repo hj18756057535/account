@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hypers.account.auth.AccountSessionUser;
+import com.hypers.account.mapper.AdminRoleMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,6 +22,14 @@ class HomePageTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private AdminRoleMapper adminRoleMapper;
+
+    @BeforeEach
+    void grantAdminRole() {
+        adminRoleMapper.insert("admin-user", "ACCOUNT_ADMIN");
+    }
 
     @Test
     void homePageLinksToUserAuthorizationAndApplicationManagementPages() throws Exception {

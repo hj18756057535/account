@@ -11,13 +11,16 @@ public class AccountDirectoryService {
 
     private final AccountStore store;
     private final ApplicationUserSyncClient syncClient;
+    private final ApplicationUrlValidator urlValidator;
 
     public AccountDirectoryService(AccountStore store, ApplicationUserSyncClient syncClient) {
         this.store = store;
         this.syncClient = syncClient;
+        this.urlValidator = new ApplicationUrlValidator();
     }
 
     public AccountApplication registerApplication(RegisterApplicationCommand command) {
+        urlValidator.validate(command);
         return store.saveApplication(command);
     }
 
@@ -94,6 +97,7 @@ public class AccountDirectoryService {
 
     public AccountApplication updateApplication(String appCode, RegisterApplicationCommand command) {
         store.requireApplication(appCode);
+        urlValidator.validate(command);
         return store.saveApplication(command);
     }
 
