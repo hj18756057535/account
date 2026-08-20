@@ -16,7 +16,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class AuthController {
 
-    static final String SESSION_USER_KEY = "accountSessionUser";
+    public static final String SESSION_USER_KEY = "accountSessionUser";
 
     private final AccountLoginService loginService;
 

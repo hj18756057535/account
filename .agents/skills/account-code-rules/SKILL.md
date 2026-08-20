@@ -13,7 +13,8 @@ description: 在 Account Center 仓库中生成或修改 Java 代码时使用，
 2. 判断改动属于用户管理、应用管理、授权管理、SSO、安全签名还是管理后台 UI。
 3. 优先复用现有工具类、异常处理和已有的 Store 方法。
 4. 集合输入先批量查库，再用 `Map` / `groupingBy` 组装；看到循环查库要优先改成批量查询。
-5. 代码改完后执行受影响模块编译或说明无法编译的原因。
+5. 新增或修改 Java DTO、Command、值对象和 Spring 组件时使用 Lombok 消除样板代码；只改当前任务触及的类，不为统一风格批量重写历史代码。
+6. 代码改完后执行受影响模块编译或说明无法编译的原因。
 
 需要更具体规则时：
 
@@ -43,6 +44,8 @@ Controller (web)  -->  AccountDirectoryService / SsoTicketService  -->  AccountS
 | 主题 | 规则 |
 | --- | --- |
 | 注入 | 使用构造器注入，不使用 `@Autowired` 或 `@Resource` 注解。 |
+| Lombok | Java 新增/修改代码使用 Lombok。值对象优先 `@Value`，可变 Request DTO 使用 `@Getter` + `@Setter`，Spring 组件的 `final` 依赖可使用 `@RequiredArgsConstructor`；避免无差别使用 `@Data`。 |
+| 版本命名 | 默认通过 Git、制品和发布版本迭代，不在普通 URL、OpenAPI 文件名、配置键、包、Controller、DTO、异常或测试类名中携带 `v1`、`V1` 等版本号。URL 直接按业务资源组织，例如 `/api/users`。只有已发布的不兼容协议必须并行且无法增量演进时，才可建立显式兼容入口，并记录消费者、迁移窗口和退出条件。 |
 | 分层 | Controller 不直接调用 Mapper；业务逻辑写在 Service/Store；Store 实现调用 Mapper。 |
 | 返回 | `List` 返回空集合，不返回 `null`。单条查询找不到时抛 `IllegalArgumentException`。 |
 | 异常 | 业务异常统一抛 `IllegalArgumentException`，由 `AccountExceptionHandler` 全局处理返回 400。SSO 异常用 `SsoTicketException`。 |
@@ -53,6 +56,7 @@ Controller (web)  -->  AccountDirectoryService / SsoTicketService  -->  AccountS
 | DTO / Command | 命令对象（Command）封装业务入参，Controller 内部类做参数校验（`@Valid` + `@NotBlank` 等）。 |
 | 校验 | Controller Request DTO 使用 `javax.validation` 注解校验；`@Valid` 触发校验。 |
 | 密钥 | `AccountApplication.secret` 是敏感字段，日志和 API 响应中不得原样暴露。 |
+| 敏感对象 | 密码、Secret、Token、Session 等敏感字段不得进入 Lombok 生成的 `toString`、`equals` 或日志；优先不生成，确需生成时显式排除。 |
 | 注释 | 简单代码不写废话注释；复杂业务规则、跨表组装、安全相关逻辑写简短功能注释。 |
 | UUID | 用户 ID 使用 `UUID.randomUUID().toString()`，不加 `-` 分隔符。 |
 
@@ -125,18 +129,19 @@ public static class SaveUserRequest {
     @NotBlank private String email;
     @NotBlank private String name;
     @NotBlank private String phone;
-    // getter/setter
 }
 
 // Command - 业务层入参
+@lombok.Value
 public class SaveUserCommand {
-    private final String account;
-    private final String email;
-    private final String name;
-    private final String phone;
-    // 构造器、getter
+    String account;
+    String email;
+    String name;
+    String phone;
 }
 ```
+
+Request DTO 需要 JavaBean setter 供 Jackson 绑定时，使用 `@Getter` + `@Setter`。包含密码、Secret、Token 或 Session 信息的类型禁止使用会生成 `toString` 的 `@Data`；Lombok 只负责样板代码，不替代边界校验和敏感字段审查。Lombok 版本跟随项目依赖管理/BOM，作为编译期依赖启用注解处理，不在业务模块重复硬编码版本。
 
 ## 全局异常处理
 
@@ -176,6 +181,8 @@ public class SaveUserCommand {
 - [ ] 包归属正确，没有跨包违规调用。
 - [ ] Controller、Service/Store、Mapper 分层正确。
 - [ ] 构造器注入，无 `@Autowired` / `@Resource`。
+- [ ] 当前新增/修改的 Java 样板代码使用 Lombok，敏感字段未进入生成的 `toString` / `equals`。
+- [ ] 普通 URL、OpenAPI 文件名、配置键、Java 包、类和测试名不携带 API 版本号；版本由 Git/制品/发布迭代，确需并行兼容时有明确迁移与退出证据。
 - [ ] `InMemoryAccountStore` 和 `MyBatisAccountStore` 行为一致。
 - [ ] Mapper XML `resultMap` 完整映射所有字段。
 - [ ] List 返回空集合，无 null。
@@ -183,4 +190,3 @@ public class SaveUserCommand {
 - [ ] 密钥等敏感信息未暴露在日志或响应中。
 - [ ] 复杂逻辑有必要的功能注释。
 - [ ] 执行受影响模块构建；若需跑测试，使用 `mvn test`。
-

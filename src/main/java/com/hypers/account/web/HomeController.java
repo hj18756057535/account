@@ -11,11 +11,6 @@ public class HomeController {
         return "home";
     }
 
-    @GetMapping("/users")
-    public String users() {
-        return "users";
-    }
-
     @GetMapping("/applications")
     public String applications() {
         return "applications";

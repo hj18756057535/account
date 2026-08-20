@@ -36,17 +36,8 @@ class HomePageTest {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Account Center")))
-                .andExpect(content().string(containsString("/users")))
+                .andExpect(content().string(containsString("/console/users")))
                 .andExpect(content().string(containsString("/applications")));
-    }
-
-    @Test
-    void usersPageKeepsUserAndAuthorizationWorkflowTogether() throws Exception {
-        mockMvc.perform(get("/users")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("/api/users")))
-                .andExpect(content().string(containsString("iframe")));
     }
 
     @Test

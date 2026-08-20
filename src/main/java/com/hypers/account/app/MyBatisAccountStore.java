@@ -121,6 +121,15 @@ public class MyBatisAccountStore implements AccountStore {
     }
 
     @Override
+    public PageResult<AccountUser> findUsersPage(UserPageQuery query) {
+        long total = userMapper.count(query);
+        List<AccountUser> items = total == 0
+                ? java.util.Collections.emptyList()
+                : userMapper.selectPage(query);
+        return new PageResult<>(items, query.getPage(), query.getSize(), total);
+    }
+
+    @Override
     public List<AccountApplication> findApplications(String keyword, String status) {
         return applicationMapper.selectByKeyword(keyword, status);
     }

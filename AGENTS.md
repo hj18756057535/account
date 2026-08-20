@@ -63,6 +63,8 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 高频底线：
 - 依赖注入使用构造器注入（项目统一风格），不使用 `@Autowired` 或 `@Resource` 注解。
+- Java 新增/修改代码使用 Lombok 消除 DTO、Command、值对象和构造器样板；敏感对象不得无差别使用 `@Data` 或生成包含密码、Secret、Token、Session 的 `toString`。
+- API 默认通过 Git、制品和发布版本迭代；普通 URL、OpenAPI 文件名、配置键、Java 包、业务类、DTO、异常和测试类名不带 `v1` / `V1`。确需并行兼容时必须单独设计迁移窗口。
 - Controller 不直接调用 Mapper；业务逻辑写在 Service/Store 层。
 - 返回 `List` 时使用空集合，不返回 `null`。
 - 领域实体（AccountUser、AccountApplication）是纯 POJO，不使用 ORM 注解。

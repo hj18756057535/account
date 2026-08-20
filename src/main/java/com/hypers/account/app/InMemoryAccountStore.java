@@ -1,6 +1,7 @@
 package com.hypers.account.app;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -102,6 +103,41 @@ public class InMemoryAccountStore implements AccountStore {
                         || u.getEmail().contains(keyword)
                         || u.getPhone().contains(keyword))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public PageResult<AccountUser> findUsersPage(UserPageQuery query) {
+        List<AccountUser> matches = findUsers(query.getKeyword(), query.getStatus());
+        matches.sort(userComparator(query));
+        int fromIndex = Math.min(query.getOffset(), matches.size());
+        int toIndex = Math.min(fromIndex + query.getSize(), matches.size());
+        return new PageResult<>(
+                new ArrayList<>(matches.subList(fromIndex, toIndex)),
+                query.getPage(),
+                query.getSize(),
+                matches.size());
+    }
+
+    private Comparator<AccountUser> userComparator(UserPageQuery query) {
+        Comparator<AccountUser> comparator;
+        boolean descending = "desc".equals(query.getSortDirection());
+        if ("account".equals(query.getSortField())) {
+            Comparator<String> valueComparator = descending
+                    ? String.CASE_INSENSITIVE_ORDER.reversed()
+                    : String.CASE_INSENSITIVE_ORDER;
+            comparator = Comparator.comparing(AccountUser::getAccount, Comparator.nullsLast(valueComparator));
+        } else if ("name".equals(query.getSortField())) {
+            Comparator<String> valueComparator = descending
+                    ? String.CASE_INSENSITIVE_ORDER.reversed()
+                    : String.CASE_INSENSITIVE_ORDER;
+            comparator = Comparator.comparing(AccountUser::getName, Comparator.nullsLast(valueComparator));
+        } else {
+            Comparator<java.time.Instant> valueComparator = descending
+                    ? Comparator.reverseOrder()
+                    : Comparator.naturalOrder();
+            comparator = Comparator.comparing(AccountUser::getCreatedAt, Comparator.nullsLast(valueComparator));
+        }
+        return comparator.thenComparing(AccountUser::getId);
     }
 
     @Override

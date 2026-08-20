@@ -1,0 +1,299 @@
+openapi: 3.1.0
+info:
+  title: Account Center Management API
+  version: 1.0.0
+  description: >-
+    Account 管理端同源 Session API。浏览器不得持有应用 Secret、Session ID 或长期 Token。
+servers:
+  - url: /
+tags:
+  - name: Session
+  - name: Users
+paths:
+  /api/session:
+    get:
+      tags: [Session]
+      operationId: getSession
+      summary: 初始化或读取当前管理会话
+      responses:
+        '200':
+          description: 当前会话；未登录时 authenticated 为 false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+    post:
+      tags: [Session]
+      operationId: login
+      summary: 使用 Account 管理身份登录
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功，服务端轮换 Session ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    delete:
+      tags: [Session]
+      operationId: logout
+      summary: 退出并使当前 Session 失效
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: 已退出
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users:
+    get:
+      tags: [Users]
+      operationId: listUsers
+      summary: 分页查询全局用户
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: query
+          in: query
+          description: 匹配账号、姓名、邮箱或手机号
+          schema:
+            type: string
+            maxLength: 128
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - createdAt,asc
+              - createdAt,desc
+              - account,asc
+              - account,desc
+              - name,asc
+              - name,desc
+            default: createdAt,desc
+      responses:
+        '200':
+          description: 稳定分页结果；相同排序值始终以 id 升序作为次级排序
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/users/{userId}:
+    get:
+      tags: [Users]
+      operationId: getUser
+      summary: 查询全局用户详情
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+      responses:
+        '200':
+          description: 用户详情；不含密码、角色、应用 Secret 和内部审计字段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 32
+      description: 由 GET /api/session 初始化并只保存在前端内存中的同步器 Token
+  responses:
+    Unauthorized:
+      description: 未登录或 Session 已失效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: CSRF 校验失败或当前角色没有访问能力
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationFailed:
+      description: 请求字段校验失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [account, password]
+      properties:
+        account:
+          type: string
+          minLength: 1
+          maxLength: 128
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+    SessionResponse:
+      type: object
+      additionalProperties: false
+      required: [authenticated, user, roles, capabilities, csrfToken]
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/SessionUser'
+            - type: 'null'
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [ACCOUNT_ADMIN, ACCOUNT_AUDITOR]
+        capabilities:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: ['users:read']
+        csrfToken:
+          type: string
+          minLength: 32
+    SessionUser:
+      type: object
+      additionalProperties: false
+      required: [id, account, name]
+      properties:
+        id:
+          type: string
+        account:
+          type: string
+        name:
+          type: string
+    UserStatus:
+      type: string
+      enum: [enabled, disabled]
+    UserResponse:
+      type: object
+      additionalProperties: false
+      required: [id, account, email, name, phone, status]
+      properties:
+        id:
+          type: string
+          maxLength: 64
+        account:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+    UserPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserResponse'
+        page:
+          type: integer
+          minimum: 1
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, traceId]
+      properties:
+        code:
+          type: string
+          examples: [AUTHENTICATION_REQUIRED]
+        message:
+          type: string
+        traceId:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string

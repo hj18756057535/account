@@ -114,10 +114,10 @@ class AccountApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("zhangsan@example.com"));
 
-        mockMvc.perform(get("/api/users?keyword=zhang")
+        mockMvc.perform(get("/api/users?query=zhang")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].account").value("zhangsan"));
+                .andExpect(jsonPath("$.items[0].account").value("zhangsan"));
 
         mockMvc.perform(put("/api/users/" + userId)
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())

@@ -1,6 +1,7 @@
 package com.hypers.account.mapper;
 
 import com.hypers.account.app.AccountUser;
+import com.hypers.account.app.UserPageQuery;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -18,6 +19,10 @@ public interface AccountUserMapper {
     AccountUser selectByAccount(@Param("account") String account);
 
     List<AccountUser> selectByKeyword(@Param("keyword") String keyword, @Param("status") String status);
+
+    List<AccountUser> selectPage(@Param("query") UserPageQuery query);
+
+    long count(@Param("query") UserPageQuery query);
 
     void updateStatus(@Param("id") String id, @Param("status") String status);
 

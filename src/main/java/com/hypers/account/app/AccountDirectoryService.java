@@ -69,6 +69,10 @@ public class AccountDirectoryService {
         return store.findUsers(keyword, status);
     }
 
+    public PageResult<AccountUser> findUsersPage(UserPageQuery query) {
+        return store.findUsersPage(query);
+    }
+
     public List<AccountApplication> findApplications(String keyword, String status) {
         return store.findApplications(keyword, status);
     }

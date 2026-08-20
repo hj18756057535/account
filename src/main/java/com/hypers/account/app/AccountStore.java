@@ -29,6 +29,8 @@ public interface AccountStore {
 
     List<AccountUser> findUsers(String keyword, String status);
 
+    PageResult<AccountUser> findUsersPage(UserPageQuery query);
+
     List<AccountApplication> findApplications(String keyword, String status);
 
     void updateUserStatus(String userId, String status);

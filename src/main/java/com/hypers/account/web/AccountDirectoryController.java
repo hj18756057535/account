@@ -39,18 +39,6 @@ public class AccountDirectoryController {
                 request.getPhone()));
     }
 
-    @GetMapping("/users")
-    public List<AccountUser> findUsers(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status) {
-        return directoryService.findUsers(keyword, status);
-    }
-
-    @GetMapping("/users/{userId}")
-    public AccountUser getUser(@PathVariable String userId) {
-        return directoryService.getUser(userId);
-    }
-
     @PutMapping("/users/{userId}")
     public AccountUser updateUser(@PathVariable String userId, @Valid @RequestBody SaveUserRequest request) {
         return directoryService.updateUser(userId, new SaveUserCommand(
