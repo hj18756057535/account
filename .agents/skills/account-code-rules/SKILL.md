@@ -54,7 +54,7 @@ Controller (web)  -->  AccountDirectoryService / SsoTicketService  -->  AccountS
 | ResultMap | XML 中的 `resultMap` 必须完整映射所有查询字段到 Java 属性，使用下划线转驼峰或显式 `<result>` 映射。 |
 | 模糊查询 | XML 中使用 `concat('%', #{keyword}, '%')`，不直接拼接 `%` 到 Java 代码。 |
 | DTO / Command | 命令对象（Command）封装业务入参，Controller 内部类做参数校验（`@Valid` + `@NotBlank` 等）。 |
-| 校验 | Controller Request DTO 使用 `javax.validation` 注解校验；`@Valid` 触发校验。 |
+| 校验 | Controller Request DTO 使用 `jakarta.validation` 注解校验；`@Valid` 触发校验。 |
 | 密钥 | `AccountApplication.secret` 是敏感字段，日志和 API 响应中不得原样暴露。 |
 | 敏感对象 | 密码、Secret、Token、Session 等敏感字段不得进入 Lombok 生成的 `toString`、`equals` 或日志；优先不生成，确需生成时显式排除。 |
 | 注释 | 简单代码不写废话注释；复杂业务规则、跨表组装、安全相关逻辑写简短功能注释。 |
@@ -119,7 +119,7 @@ public class MyBatisAccountStore implements AccountStore {
 ## 命令对象与请求 DTO
 
 - **Command** (`SaveUserCommand`, `RegisterApplicationCommand`): 业务层入参封装，放在 `app` 包，不含校验注解。
-- **Request DTO** (Controller 内部类): 网络层入参校验，放在 `web` 包的 Controller 内部，使用 `javax.validation` 注解。
+- **Request DTO** (Controller 内部类): 网络层入参校验，放在 `web` 包的 Controller 内部，使用 `jakarta.validation` 注解。
 - Controller 将 Request DTO 转换为 Command 后传给 Service。
 
 ```java

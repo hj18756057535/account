@@ -7,22 +7,21 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 管理端权限服务。
  * 校验用户是否拥有 ACCOUNT_ADMIN 或 ACCOUNT_AUDITOR 角色。
  */
+@RequiredArgsConstructor
 public class AdminAuthorizationService {
 
     public static final String ACCOUNT_ADMIN = "ACCOUNT_ADMIN";
     public static final String ACCOUNT_AUDITOR = "ACCOUNT_AUDITOR";
     public static final String USERS_READ = "users:read";
+    public static final String USERS_WRITE = "users:write";
 
     private final AdminRoleMapper adminRoleMapper;
-
-    public AdminAuthorizationService(AdminRoleMapper adminRoleMapper) {
-        this.adminRoleMapper = adminRoleMapper;
-    }
 
     /** 检查用户是否拥有指定角色 */
     public boolean hasRole(String userId, String roleCode) {
@@ -60,6 +59,17 @@ public class AdminAuthorizationService {
         if (roles.contains(ACCOUNT_ADMIN) || roles.contains(ACCOUNT_AUDITOR)) {
             capabilities.add(USERS_READ);
         }
+        if (roles.contains(ACCOUNT_ADMIN)) {
+            capabilities.add(USERS_WRITE);
+        }
         return Collections.unmodifiableList(new ArrayList<>(capabilities));
+    }
+
+    public int countEnabledAdmins() {
+        return adminRoleMapper.countEnabledAdmins();
+    }
+
+    public int lockAndCountEnabledAdmins() {
+        return adminRoleMapper.lockEnabledAdminIds().size();
     }
 }

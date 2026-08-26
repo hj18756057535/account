@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.13</version>
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
 
@@ -19,11 +19,14 @@
     <description>Internal account center with SSO and application authorization</description>
 
     <properties>
-        <java.version>11</java.version>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.proc>full</maven.compiler.proc>
     </properties>
 
     <modules>
+        <module>account-center-contract</module>
         <module>account-center-server</module>
-        <module>account-center-starter</module>
+        <module>account-center-spring-boot-starter</module>
     </modules>
 </project>

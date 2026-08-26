@@ -17,4 +17,8 @@ public interface AdminRoleMapper {
 
     /** 新增角色 */
     void insert(@Param("userId") String userId, @Param("roleCode") String roleCode);
+
+    int countEnabledAdmins();
+
+    List<String> lockEnabledAdminIds();
 }

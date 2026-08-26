@@ -1,6 +1,68 @@
-# Account Center 应用对接指南
+# Account Center 应用接入指南
 
-本指南帮助业务应用接入 Account Center，实现 SSO 单点登录和用户同步。
+> 当前事实源：`openapi/account-api.yaml` 与 `openapi/account-application-api.yaml`。下方“历史草案”仅保留设计追溯，不得用于新接入。
+
+## 当前三模块接入方式
+
+业务应用只引入 Spring Boot Starter；Contract 会作为传递依赖进入应用。Account Server 不依赖 Starter。
+
+```xml
+<dependency>
+    <groupId>com.hypers</groupId>
+    <artifactId>account-center-spring-boot-starter</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+应用配置通过环境变量或配置中心注入，Secret 不提交 Git：
+
+```yaml
+account:
+  integration:
+    enabled: true
+    account-base-url: http://127.0.0.1:8088
+    app-code: your-app
+    secret: ${ACCOUNT_INTEGRATION_SECRET}
+    connect-timeout: 2s
+    request-timeout: 5s
+    allowed-clock-skew: 5m
+    provider-enabled: true
+```
+
+Starter 自动提供 `AccountSsoClient` 和 `AccountAdminTicketClient`。业务系统需要接收用户同步时，实现一个 Bean：
+
+```java
+@Component
+public class BusinessAccountUserSyncHandler implements AccountUserSyncHandler {
+
+    @Override
+    public AccountUserSyncResult apply(AccountUserDesiredState desiredState) {
+        // 按 appCode + globalUserId + syncVersion 在业务系统内持久化并幂等应用。
+        return AccountUserSyncResult.builder()
+                .appCode(desiredState.getAppCode())
+                .globalUserId(desiredState.getGlobalUserId())
+                .localUserId("business-local-user-id")
+                .appliedStatus(desiredState.getDesiredStatus())
+                .appliedVersion(desiredState.getSyncVersion())
+                .resultCode("APPLIED")
+                .build();
+    }
+}
+```
+
+存在 Handler 且 `provider-enabled=true` 时，Starter 暴露：
+
+```text
+PUT /account-integration/users/{globalUserId}
+```
+
+该端点在调用 Handler 前校验 HMAC、时间窗、Nonce、应用编码、幂等键、状态枚举和同步版本。业务系统仍负责本地用户、角色、组织和数据权限，不得由 Starter 自动授予业务权限。
+
+## 历史草案（已废弃，不得用于新接入）
+
+以下内容描述未发布的旧 `account-center-starter` 与 `/account-sso/internal/users/**` 方案，仅作为需求演进记录。
+
+本指南原用于说明旧版 SSO 单点登录和用户同步。
 
 ## 1. 对接概览
 

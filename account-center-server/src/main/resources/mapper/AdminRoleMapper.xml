@@ -14,4 +14,21 @@
         insert into account_admin_roles (user_id, role_code) values (#{userId}, #{roleCode})
     </insert>
 
+    <select id="countEnabledAdmins" resultType="int">
+        select count(distinct r.user_id)
+        from account_admin_roles r
+        join account_users u on u.id = r.user_id
+        where r.role_code = 'ACCOUNT_ADMIN' and u.status = 'enabled'
+    </select>
+
+    <select id="lockEnabledAdminIds" resultType="string">
+        select r.user_id
+        from account_admin_roles r
+        join account_users u on u.id = r.user_id
+        where r.role_code = 'ACCOUNT_ADMIN'
+          and u.status = 'enabled'
+        order by r.user_id
+        for update
+    </select>
+
 </mapper>

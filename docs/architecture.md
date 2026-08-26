@@ -8,10 +8,10 @@ Account Center 是内部统一账户中心，负责用户身份管理、应用�
 
 | 组件 | 技术选型 | 版本 |
 |------|---------|------|
-| 框架 | Spring Boot | 2.7.13 |
-| JDK | Java | 11 |
-| ORM | MyBatis | 2.3.2 (starter) |
-| 迁移 | Flyway | 8.5.x |
+| 框架 | Spring Boot | 3.5.16 |
+| JDK | Java | 21 LTS |
+| ORM | MyBatis | 3.0.5 (starter) |
+| 迁移 | Flyway | 11.7.2（由 Boot BOM 管理） |
 | 模板 | Thymeleaf | - |
 | 数据库 | PostgreSQL (主) / MySQL (备) / H2 (测试) | - |
 | 密码 | BCrypt (spring-security-crypto) | - |
@@ -21,19 +21,18 @@ Account Center 是内部统一账户中心，负责用户身份管理、应用�
 
 ```
 account-center/                          # 父 POM (packaging: pom)
+├── account-center-contract/             # 双向请求/响应类型与协议常量
+│   └── pom.xml                          # 无 Spring、HTTP 或数据库依赖
 ├── account-center-server/               # 服务端，Spring Boot 可执行 jar
-│   ├── pom.xml                          # 依赖 server + starter
-│   └── src/main/resources/              # 额外配置和模板
-├── account-center-starter/              # SDK，给业务应用引入
-│   ├── pom.xml                          # 仅依赖 jackson-databind
-│   └── src/main/java/                   # DTO、签名、客户端、接口
-└── src/                                 # 服务端主源码（通过 build-helper 共享）
-    ├── main/java/com/hypers/account/    # Java 源码
-    ├── main/resources/                  # 配置、迁移、Mapper XML、模板
-    └── test/                            # 测试
+│   ├── pom.xml                          # 只依赖 contract，不依赖 starter
+│   └── src/                             # Server 的 Java、资源与测试唯一事实源
+├── account-center-spring-boot-starter/  # 业务应用双向集成制品
+│   ├── pom.xml                          # 依赖 contract 与 Boot 自动配置能力
+│   └── src/main/java/                   # Client、SPI、自动配置、Provider Web 与安全边界
+└── pom.xml                              # Reactor 聚合与统一依赖管理
 ```
 
-**设计决策：** starter 模块不依赖 Spring，保持纯 Java SDK，业务应用引入后不会引入额外的 Spring Bean 或自动配置。
+**设计决策：** 当前消费者均为 Spring Boot 应用，因此 Client 与自动配置合并在一个 Starter 制品中。Starter 内聚出站 Client 和入站 Provider SPI；Server 与 Starter 只共享 Contract，不共享领域实现。
 
 ## 4. 分层架构
 
@@ -168,7 +167,7 @@ Account Center 管理页面              业务应用 iframe
 **签名原文格式：**
 
 ```
-POST\n/account-sso/internal/users/upsert\n1710000000000\nabc123def456\n{"appCode":"cms-ai",...}
+PUT\n/account-integration/users/user-1\n1710000000000\nabc123def456\n{"appCode":"cms-ai",...}
 ```
 
 ### 6.2 Nonce 防重放

@@ -14,15 +14,20 @@
 
 Account Center 是内部账号中心服务，提供用户管理、应用（子系统）注册、用户-应用授权和 SSO 单点登录能力。
 
-- **框架**: Spring Boot 2.7.13 + MyBatis + Flyway
+- **运行时**: Java 21 LTS
+- **框架**: Spring Boot 3.5.16 + MyBatis Spring Boot Starter 3.0.5 + Flyway
 - **数据库**: PostgreSQL（主）、MySQL（备选）、H2（测试）
 - **模板**: Thymeleaf（管理后台 UI）
 - **端口**: 8088
-- **构建**: `mvn clean package -DskipTests`，无 Maven Wrapper
+- **构建**: `.\mvnw.cmd clean package -DskipTests`
 
 ## 包归属
 
-根包 `com.hypers.account`，单模块 Maven 工程。
+根包 `com.hypers.account`，根 POM 聚合 `account-center-contract`、`account-center-server` 与 `account-center-spring-boot-starter`。Server 的唯一有效源码、资源和测试目录是 `account-center-server/src/**`；框架升级期间遗留且不参与构建的根 `src/**` 已于 2026-08-25 按开发者确认删除，不得重新建立根源码目录。
+
+- `account-center-contract`：只保存跨进程请求/响应类型和协议常量，不依赖 Spring 或数据库。
+- `account-center-spring-boot-starter`：业务系统引入的双向集成制品，内部按 `client`、`spi`、`autoconfigure`、`web`、`security`、`properties` 分包。
+- `account-center-server`：服务端领域和持久化实现，只依赖 Contract，不依赖 Starter。
 
 | 包 | 职责 |
 | --- | --- |
@@ -86,11 +91,11 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 ## 数据库与部署
 
-- 数据库迁移使用 Flyway，脚本位于 `src/main/resources/db/migration/`。
+- 数据库迁移使用 Flyway，脚本位于 `account-center-server/src/main/resources/db/migration/`。
 - 新增表、字段变更只新增对应版本的增量迁移脚本（`V{N}__{description}.sql`）。
 - Flyway 脚本命名格式: `V{版本号}__{描述}.sql`，版本号递增，描述用下划线分隔。
 - 数据库表名统一使用 `account_` 前缀。
-- Mapper XML 位于 `src/main/resources/mapper/`，不要随意迁移目录。
+- Mapper XML 位于 `account-center-server/src/main/resources/mapper/`，不要随意迁移目录。
 - 主键策略: 用户表使用 UUID 字符串（`varchar(64)`），应用表使用业务编码 `app_code`。
 - 所有表包含审计字段: `created_by`、`updated_by`、`created_at`、`updated_at`。
 - 环境变量: `ACCOUNT_DB_URL`、`ACCOUNT_DB_USERNAME`、`ACCOUNT_DB_PASSWORD`，开发环境有默认值。
@@ -105,16 +110,16 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 ## 开发环境与命令
 
 - 团队本地以 Windows 为主。命令、脚本和排查步骤优先提供 PowerShell / Windows 可执行方式。
-- 不要默认存在 Maven Wrapper、GNU 工具链、`bash`、`sed -i`、`awk`、`kubectl`、`docker` 等命令。
+- 仓库已提供 Maven Wrapper；不要默认存在 GNU 工具链、`bash`、`sed -i`、`awk`、`kubectl`、`docker` 等命令。
 - 中文 Markdown、配置示例、SQL 和 Java 注释保持 UTF-8。
 - 新增团队本地脚本优先提供 `.bat` 或 PowerShell 版本；如果只提供 `.sh`，必须说明运行环境。
 
 ## 构建与验证
 
-- 仓库没有 Maven Wrapper。
-- 构建: `mvn clean package -DskipTests`
-- 测试: `mvn test`（测试使用 H2 内存数据库，无需外部依赖）
-- 本地验证优先使用 JDK 11；JDK 21 可能因 Lombok/Javac 兼容问题编译失败。
+- 仓库使用 Maven Wrapper 3.3.4，固定 Maven 3.9.14。
+- 构建: `.\mvnw.cmd clean package -DskipTests`
+- 测试: `.\mvnw.cmd test`（测试使用 H2 内存数据库，无需外部依赖）
+- 本地构建和运行只支持 JDK 21；执行前确认 `JAVA_HOME` 与 PATH 指向 JDK 21。
 - 为提升协作效率，不要在每次小改后都执行 Maven 构建；优先做 `git diff --check`、定向静态检查和代码自检，只有在关键节点、完成阶段或用户明确要求时再执行 Maven 构建。
 - 仅修改注解、VO/DTO 字段说明、国际化文案、Markdown 文档等低风险内容时，默认不跑完整 Maven 构建；最终回复必须明确说明做了哪些轻量验证，以及未跑 Maven 构建。
 - 本地/开发启动需要 PostgreSQL；测试使用 H2 内存数据库，无外部依赖。

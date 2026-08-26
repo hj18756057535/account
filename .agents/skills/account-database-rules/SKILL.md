@@ -63,7 +63,7 @@ V3__create_audit_index.sql      -- 新增索引示例
 - 版本号 `N` 递增，不可重复。
 - 描述用下划线分隔，简洁说明变更内容。
 - 只写增量变更（`ALTER TABLE`、`CREATE INDEX` 等），不修改已执行的历史脚本。
-- 脚本位于 `src/main/resources/db/migration/`。
+- 脚本位于 `account-center-server/src/main/resources/db/migration/`。
 - Flyway 配置: `spring.flyway.enabled=true`、`locations=classpath:db/migration`、`baseline-on-migrate=true`。
 
 示例：
@@ -112,4 +112,3 @@ CREATE INDEX idx_operation_logs_created ON account_operation_logs (created_at);
 - [ ] 索引和唯一键有业务依据。
 - [ ] 无敏感信息。
 - [ ] 受影响模块可编译，或已说明无法编译原因。
-

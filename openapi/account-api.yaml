@@ -9,6 +9,7 @@ servers:
 tags:
   - name: Session
   - name: Users
+  - name: Integration
 paths:
   /api/session:
     get:
@@ -114,6 +115,36 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+    post:
+      tags: [Users]
+      operationId: createUser
+      summary: 创建全局用户
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: 用户已创建；重复幂等请求复用首次响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
   /api/users/{userId}:
     get:
       tags: [Users]
@@ -142,6 +173,135 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Users]
+      operationId: updateUser
+      summary: 修改全局用户基本资料
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: 修改后的用户；版本单调递增
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/users/{userId}/status:
+    put:
+      tags: [Users]
+      operationId: changeUserStatus
+      summary: 启用或禁用全局用户
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeUserStatusRequest'
+      responses:
+        '200':
+          description: 状态已更新；不会在本切片触发业务系统同步
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /openapi/sso/tickets/exchange:
+    post:
+      tags: [Integration]
+      operationId: exchangeSsoTicket
+      summary: 业务系统使用一次性 Code 兑换 Account 用户快照
+      parameters:
+        - $ref: '#/components/parameters/IntegrationAppCode'
+        - $ref: '#/components/parameters/IntegrationTimestamp'
+        - $ref: '#/components/parameters/IntegrationNonce'
+        - $ref: '#/components/parameters/IntegrationSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SsoTicketExchangeRequest'
+      responses:
+        '200':
+          description: Ticket 已原子消费
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoTicketExchangeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /openapi/admin-tickets/verify:
+    post:
+      tags: [Integration]
+      operationId: verifyAdminTicket
+      summary: 业务系统验证一次性管理 Ticket
+      parameters:
+        - $ref: '#/components/parameters/IntegrationAppCode'
+        - $ref: '#/components/parameters/IntegrationTimestamp'
+        - $ref: '#/components/parameters/IntegrationNonce'
+        - $ref: '#/components/parameters/IntegrationSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminTicketVerifyRequest'
+      responses:
+        '200':
+          description: Ticket 已验证并原子消费
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTicketVerifyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 components:
   securitySchemes:
     sessionCookie:
@@ -149,6 +309,34 @@ components:
       in: cookie
       name: JSESSIONID
   parameters:
+    IntegrationAppCode:
+      name: X-Account-App-Code
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    IntegrationTimestamp:
+      name: X-Account-Timestamp
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9]+$'
+    IntegrationNonce:
+      name: X-Account-Nonce
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+    IntegrationSignature:
+      name: X-Account-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
     CsrfToken:
       name: X-CSRF-Token
       in: header
@@ -157,6 +345,15 @@ components:
         type: string
         minLength: 32
       description: 由 GET /api/session 初始化并只保存在前端内存中的同步器 Token
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+      description: 按操作者、方法和规范化资源路径隔离，完成结果至少保留 24 小时
   responses:
     Unauthorized:
       description: 未登录或 Session 已失效
@@ -178,6 +375,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     ValidationFailed:
       description: 请求字段校验失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 账号重复、资源版本冲突或幂等键冲突
       content:
         application/json:
           schema:
@@ -219,7 +422,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: ['users:read']
+            enum: ['users:read', 'users:write']
         csrfToken:
           type: string
           minLength: 32
@@ -240,7 +443,7 @@ components:
     UserResponse:
       type: object
       additionalProperties: false
-      required: [id, account, email, name, phone, status]
+      required: [id, account, email, name, phone, status, version]
       properties:
         id:
           type: string
@@ -255,12 +458,79 @@ components:
           type: string
         status:
           $ref: '#/components/schemas/UserStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 1
         createdAt:
           type: [string, 'null']
           format: date-time
         updatedAt:
           type: [string, 'null']
           format: date-time
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [account, email, name, phone]
+      properties:
+        account:
+          type: string
+          minLength: 1
+          maxLength: 128
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 255
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 64
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [account, email, name, phone, version]
+      properties:
+        account:
+          type: string
+          minLength: 1
+          maxLength: 128
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 255
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+    ChangeUserStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, version, reason]
+      properties:
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 256
     UserPageResponse:
       type: object
       additionalProperties: false
@@ -297,3 +567,51 @@ components:
           type: object
           additionalProperties:
             type: string
+    SsoTicketExchangeRequest:
+      type: object
+      additionalProperties: false
+      required: [appCode, code]
+      properties:
+        appCode:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+    SsoTicketExchangeResponse:
+      type: object
+      additionalProperties: false
+      required: [externalUserId, account, name, tenantCode]
+      properties:
+        externalUserId:
+          type: string
+        account:
+          type: string
+        email:
+          type: [string, 'null']
+        name:
+          type: string
+        phone:
+          type: [string, 'null']
+        tenantCode:
+          type: string
+    AdminTicketVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [appCode, ticket]
+      properties:
+        appCode:
+          type: string
+          minLength: 1
+        ticket:
+          type: string
+          minLength: 1
+    AdminTicketVerifyResponse:
+      type: object
+      additionalProperties: false
+      required: [appCode, userId]
+      properties:
+        appCode:
+          type: string
+        userId:
+          type: string

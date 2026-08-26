@@ -17,40 +17,40 @@
 
 ### 环境要求
 
-- JDK 11
-- Maven 3.6+
+- JDK 21
+- Maven Wrapper（固定 Maven 3.9.14）
 - PostgreSQL 12+（或 MySQL 8.0+）
 
 ### 构建
 
-```bash
-mvn clean package -DskipTests
+```powershell
+.\mvnw.cmd clean package -DskipTests
 ```
 
 ### 启动（PostgreSQL）
 
-```bash
-export ACCOUNT_DB_URL=jdbc:postgresql://localhost:5432/account_center
-export ACCOUNT_DB_USERNAME=account
-export ACCOUNT_DB_PASSWORD=account
+```powershell
+$env:ACCOUNT_DB_URL='jdbc:postgresql://localhost:5432/account_center'
+$env:ACCOUNT_DB_USERNAME='account'
+$env:ACCOUNT_DB_PASSWORD='<local-password>'
 
 java -jar account-center-server/target/account-center-server-0.1.0-SNAPSHOT.jar
 ```
 
 ### 启动（MySQL）
 
-```bash
-export ACCOUNT_DB_URL=jdbc:mysql://localhost:3306/account_center?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-export ACCOUNT_DB_USERNAME=account
-export ACCOUNT_DB_PASSWORD=account
+```powershell
+$env:ACCOUNT_DB_URL='jdbc:mysql://localhost:3306/account_center?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
+$env:ACCOUNT_DB_USERNAME='account'
+$env:ACCOUNT_DB_PASSWORD='<local-password>'
 
 java -jar account-center-server/target/account-center-server-0.1.0-SNAPSHOT.jar --spring.profiles.active=mysql
 ```
 
 ### 运行测试
 
-```bash
-mvn test
+```powershell
+.\mvnw.cmd test
 ```
 
 测试使用 H2 内存数据库，无需外部依赖。
@@ -60,29 +60,25 @@ mvn test
 ```
 account-center/
 ├── pom.xml                              # 父 POM
-├── account-center-server/               # 服务端模块
-├── account-center-starter/              # SDK（业务应用引入）
-├── docs/
-│   ├── architecture.md                  # 架构设计文档
-│   └── integration-guide.md             # 应用对接指南
-└── src/
-    ├── main/java/com/hypers/account/
-    │   ├── app/                         # 领域模型、Store、Service
-    │   ├── auth/                        # 登录认证
-    │   ├── admin/                       # 管理 ticket
-    │   ├── audit/                       # 审计日志
-    │   ├── mapper/                      # MyBatis Mapper 接口
-    │   ├── security/                    # HMAC 签名
-    │   ├── sso/                         # SSO ticket
-    │   ├── web/                         # Controller
-    │   └── config/                      # Bean 配置
-    ├── main/resources/
-    │   ├── application.yml              # 主配置
-    │   ├── application-mysql.yml        # MySQL 配置
-    │   ├── db/migration/                # Flyway 迁移脚本
-    │   ├── mapper/                      # MyBatis XML
-    │   └── templates/                   # Thymeleaf 页面
-    └── test/                            # 测试
+├── account-center-server/               # 服务端模块；Java、资源、测试唯一事实源
+│   └── src/
+│       ├── main/java/com/hypers/account/
+│       │   ├── app/                     # 领域模型、Store、Service
+│       │   ├── auth/                    # 登录认证
+│       │   ├── admin/                   # 管理 ticket
+│       │   ├── audit/                   # 审计日志
+│       │   ├── mapper/                  # MyBatis Mapper 接口
+│       │   ├── security/                # HMAC 签名
+│       │   ├── sso/                     # SSO ticket
+│       │   ├── web/                     # Controller
+│       │   └── config/                  # Bean 配置
+│       ├── main/resources/              # 配置、Flyway、Mapper XML、模板
+│       └── test/                        # 测试
+├── account-center-contract/             # 双向远程契约与协议常量
+├── account-center-spring-boot-starter/  # 业务应用引入的 Client + Provider SPI/自动装配
+└── docs/
+    ├── architecture.md                  # 架构设计文档
+    └── integration-guide.md             # 应用接入指南
 ```
 
 ## 分层架构
@@ -121,12 +117,12 @@ Controller → Service → Store(接口) → MyBatisAccountStore → Mapper → 
 
 ## 应用接入
 
-业务应用引入 `account-center-starter` 即可接入 Account Center。只需实现两个接口：
+Spring Boot 业务应用引入 `account-center-spring-boot-starter` 即可同时调用 Account，并向 Account 暴露标准用户同步端点：
 
 ```xml
 <dependency>
     <groupId>com.hypers</groupId>
-    <artifactId>account-center-starter</artifactId>
+    <artifactId>account-center-spring-boot-starter</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -151,5 +147,6 @@ Controller → Service → Store(接口) → MyBatisAccountStore → Mapper → 
 | MyBatis 而非 JPA | SQL 与 Java 分离，方便 DBA 审核和调优 |
 | Flyway 迁移 | 版本化管理数据库变更，支持多环境自动迁移 |
 | Store 模式 | 数据访问抽象层，测试时可切换为 InMemoryAccountStore |
-| Starter 不依赖 Spring | 纯 Java SDK，业务应用引入后不引入额外 Bean |
-| 同步使用 HTTP | 第一版只做接口通知，不做 MQ |
+| 三模块边界 | Server 与 Starter 分别只依赖 Contract；Server 不依赖 Starter |
+| 双向 Starter | 自动装配 Account Client；业务应用实现 `AccountUserSyncHandler` 后暴露受 HMAC 保护的同步端点 |
+| 同步使用 HTTP | 当前建立同步契约骨架；持久化 Outbox 在后续业务系统接入切片实现 |

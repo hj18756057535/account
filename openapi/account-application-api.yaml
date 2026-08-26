@@ -1,0 +1,183 @@
+openapi: 3.1.0
+info:
+  title: Account Application Integration API
+  version: 0.1.0
+  description: >-
+    业务系统作为 Provider 暴露给 Account Center 的用户期望状态接口。
+    HMAC 签名原文为 method、path、timestamp、nonce、body 按换行连接。
+servers:
+  - url: /
+tags:
+  - name: Account User Sync
+paths:
+  /account-integration/users/{globalUserId}:
+    put:
+      tags: [Account User Sync]
+      operationId: applyAccountUserDesiredState
+      summary: 幂等应用 Account 用户期望状态
+      parameters:
+        - name: globalUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: X-Account-App-Code
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+        - name: X-Account-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]+$'
+        - name: X-Account-Nonce
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 16
+        - name: X-Account-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUserDesiredState'
+      responses:
+        '200':
+          description: 期望状态已应用，或相同幂等键的既有结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountUserSyncResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '502':
+          $ref: '#/components/responses/DependencyUnavailable'
+components:
+  responses:
+    Unauthorized:
+      description: HMAC、时间窗或 Nonce 校验失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: syncVersion 已落后或与既有状态冲突
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationFailed:
+      description: 字段或状态值不符合契约
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    DependencyUnavailable:
+      description: 业务 Handler 返回了不可采用的结果
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    AccountUserDesiredState:
+      type: object
+      additionalProperties: false
+      required:
+        - appCode
+        - globalUserId
+        - account
+        - displayName
+        - tenantCode
+        - desiredStatus
+        - syncVersion
+        - occurredAt
+      properties:
+        appCode:
+          type: string
+          minLength: 1
+        globalUserId:
+          type: string
+          minLength: 1
+        localUserId:
+          type: [string, 'null']
+        account:
+          type: string
+          minLength: 1
+        displayName:
+          type: string
+          minLength: 1
+        email:
+          type: [string, 'null']
+          format: email
+        phone:
+          type: [string, 'null']
+        tenantCode:
+          type: string
+          minLength: 1
+        desiredStatus:
+          type: string
+          enum: [enabled, disabled]
+        syncVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        occurredAt:
+          type: string
+          format: date-time
+    AccountUserSyncResult:
+      type: object
+      additionalProperties: false
+      required: [appCode, globalUserId, localUserId, appliedStatus, appliedVersion, resultCode]
+      properties:
+        appCode:
+          type: string
+        globalUserId:
+          type: string
+        localUserId:
+          type: string
+        appliedStatus:
+          type: string
+          enum: [enabled, disabled]
+        appliedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        resultCode:
+          type: string
+          examples: [APPLIED]
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, traceId, fieldErrors]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        traceId:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            type: string
