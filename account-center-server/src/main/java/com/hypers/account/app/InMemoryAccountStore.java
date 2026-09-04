@@ -16,6 +16,8 @@ public class InMemoryAccountStore implements AccountStore {
     private final Map<String, AccountUser> usersById = new HashMap<>();
     private final Map<String, AccountApplication> applicationsByCode = new HashMap<>();
     private final Map<String, Set<String>> authorizedAppsByUserId = new HashMap<>();
+    private final Map<String, ApplicationAccess> applicationAccessByKey = new HashMap<>();
+    private final Map<String, ApplicationSyncCommand> syncCommandsById = new HashMap<>();
 
     @Override
     public AccountUser saveNewUser(SaveUserCommand command) {
@@ -82,6 +84,34 @@ public class InMemoryAccountStore implements AccountStore {
     }
 
     @Override
+    public AccountApplication createManagedApplication(SaveApplicationCommand command, String operatorId) {
+        if (applicationsByCode.containsKey(command.getAppCode())) {
+            throw new ApplicationAlreadyExistsException();
+        }
+        AccountApplication application = toManagedApplication(command, operatorId);
+        applicationsByCode.put(application.getAppCode(), application);
+        return application;
+    }
+
+    @Override
+    public AccountApplication updateManagedApplication(SaveApplicationCommand command, String operatorId) {
+        AccountApplication application = requireApplication(command.getAppCode());
+        if (application.getVersion() != command.getExpectedVersion()) {
+            throw new ResourceVersionConflictException();
+        }
+        application.setName(command.getName());
+        application.setEntryUrl(command.getEntryUrl());
+        application.setSsoCallbackUrl(command.getSsoCallbackUrl());
+        application.setPermissionIframeUrl(command.getPermissionIframeUrl());
+        application.setNotifyBaseUrl(command.getNotifyBaseUrl());
+        application.setDefaultTenantCode(normalizeTenant(command.getDefaultTenantCode()));
+        application.setProtocolCapabilities(command.getProtocolCapabilities());
+        application.setUpdatedBy(operatorId);
+        application.setVersion(application.getVersion() + 1);
+        return application;
+    }
+
+    @Override
     public AccountUser requireUser(String userId) {
         return Optional.ofNullable(usersById.get(userId))
                 .orElseThrow(() -> new IllegalArgumentException("user not found"));
@@ -110,6 +140,50 @@ public class InMemoryAccountStore implements AccountStore {
             applications.add(requireApplication(appCode));
         }
         return applications;
+    }
+
+    @Override
+    public List<ApplicationAccess> findApplicationAccess(String userId) {
+        return applicationAccessByKey.values().stream()
+                .filter(access -> userId.equals(access.getUserId()))
+                .sorted(Comparator.comparing(ApplicationAccess::getAppCode))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public ApplicationAccess requireApplicationAccess(String userId, String appCode) {
+        return Optional.ofNullable(applicationAccessByKey.get(accessKey(userId, appCode)))
+                .orElseThrow(() -> new IllegalArgumentException("application access not found"));
+    }
+
+    @Override
+    public ApplicationAccess saveApplicationAccess(String userId,
+                                                   String appCode,
+                                                   String desiredStatus,
+                                                   long expectedVersion,
+                                                   String operatorId) {
+        String key = accessKey(userId, appCode);
+        ApplicationAccess existing = applicationAccessByKey.get(key);
+        if ((existing == null && expectedVersion != 0)
+                || (existing != null && existing.getVersion() != expectedVersion)) {
+            throw new ResourceVersionConflictException();
+        }
+        long version = existing == null ? 1 : existing.getVersion() + 1;
+        ApplicationAccess access = new ApplicationAccess(
+                userId, appCode, desiredStatus, version,
+                "pending_application_adaptation", null, java.time.Instant.now());
+        applicationAccessByKey.put(key, access);
+        if ("enabled".equals(desiredStatus)) {
+            authorizedAppsByUserId.computeIfAbsent(userId, ignored -> new HashSet<>()).add(appCode);
+        } else {
+            authorizedAppsByUserId.computeIfAbsent(userId, ignored -> new HashSet<>()).remove(appCode);
+        }
+        return access;
+    }
+
+    @Override
+    public void saveSyncCommand(ApplicationSyncCommand command) {
+        syncCommandsById.put(command.getId(), command);
     }
 
     @Override
@@ -203,10 +277,57 @@ public class InMemoryAccountStore implements AccountStore {
     }
 
     @Override
+    public AccountApplication updateManagedApplicationStatus(String appCode,
+                                                             String status,
+                                                             long expectedVersion,
+                                                             String operatorId) {
+        AccountApplication application = requireApplication(appCode);
+        if (application.getVersion() != expectedVersion) {
+            throw new ResourceVersionConflictException();
+        }
+        application.setStatus(status);
+        application.setUpdatedBy(operatorId);
+        application.setVersion(application.getVersion() + 1);
+        return application;
+    }
+
+    @Override
     public void rotateApplicationSecret(String appCode, String newSecret, int newVersion) {
         AccountApplication app = requireApplication(appCode);
         app.setSecret(newSecret);
         app.setSecretVersion(newVersion);
+    }
+
+    @Override
+    public AccountApplication rotateManagedApplicationSecret(String appCode,
+                                                              String newSecret,
+                                                              int newSecretVersion,
+                                                              long expectedVersion,
+                                                              String operatorId) {
+        AccountApplication application = requireApplication(appCode);
+        if (application.getVersion() != expectedVersion) {
+            throw new ResourceVersionConflictException();
+        }
+        application.setSecret(newSecret);
+        application.setSecretVersion(newSecretVersion);
+        application.setSecretState("active");
+        application.setUpdatedBy(operatorId);
+        application.setVersion(application.getVersion() + 1);
+        return application;
+    }
+
+    @Override
+    public AccountApplication revokeManagedApplicationSecret(String appCode,
+                                                              long expectedVersion,
+                                                              String operatorId) {
+        AccountApplication application = requireApplication(appCode);
+        if (application.getVersion() != expectedVersion) {
+            throw new ResourceVersionConflictException();
+        }
+        application.setSecretState("revoked");
+        application.setUpdatedBy(operatorId);
+        application.setVersion(application.getVersion() + 1);
+        return application;
     }
 
     @Override
@@ -228,5 +349,26 @@ public class InMemoryAccountStore implements AccountStore {
         if (existing != null && !existing.getId().equals(currentUserId)) {
             throw new AccountAlreadyExistsException();
         }
+    }
+
+    private AccountApplication toManagedApplication(SaveApplicationCommand command, String operatorId) {
+        AccountApplication application = new AccountApplication(
+                command.getAppCode(), command.getName(), command.getEntryUrl(), command.getSsoCallbackUrl(),
+                command.getPermissionIframeUrl(), command.getNotifyBaseUrl(), command.getSecret(),
+                normalizeTenant(command.getDefaultTenantCode()));
+        application.setProtocolCapabilities(command.getProtocolCapabilities());
+        application.setCreatedBy(operatorId);
+        return application;
+    }
+
+    private String normalizeTenant(String tenantCode) {
+        return Optional.ofNullable(tenantCode)
+                .filter(value -> !value.trim().isEmpty())
+                .map(String::trim)
+                .orElse("default");
+    }
+
+    private String accessKey(String userId, String appCode) {
+        return userId + "\n" + appCode;
     }
 }

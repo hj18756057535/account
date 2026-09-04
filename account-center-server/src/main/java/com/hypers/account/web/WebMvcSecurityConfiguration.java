@@ -27,6 +27,11 @@ public class WebMvcSecurityConfiguration implements WebMvcConfigurer {
                         "/audit-logs")
                 .excludePathPatterns("/api/session");
         registry.addInterceptor(new CsrfInterceptor(csrfTokenManager, apiErrorWriter))
-                .addPathPatterns("/api/session", "/api/users", "/api/users/**");
+                .addPathPatterns(
+                        "/api/session",
+                        "/api/users",
+                        "/api/users/**",
+                        "/api/applications",
+                        "/api/applications/**");
     }
 }

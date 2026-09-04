@@ -13,7 +13,7 @@ public class HomeController {
 
     @GetMapping("/applications")
     public String applications() {
-        return "applications";
+        return "redirect:/console/applications";
     }
 
     @GetMapping("/audit-logs")

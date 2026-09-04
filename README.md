@@ -103,17 +103,19 @@ Controller → Service → Store(接口) → MyBatisAccountStore → Mapper → 
 | 用户 | POST | `/api/users/{id}/enable` | 启用 |
 | 用户 | POST | `/api/users/{id}/disable` | 禁用（同步通知应用） |
 | 应用 | POST | `/api/applications` | 注册应用 |
-| 应用 | GET | `/api/applications?keyword=&status=` | 搜索应用 |
+| 应用 | GET | `/api/applications?query=&status=` | 搜索应用（脱敏） |
 | 应用 | GET/PUT | `/api/applications/{code}` | 查看/编辑 |
+| 应用 | PUT | `/api/applications/{code}/status` | 启用/禁用 |
 | 应用 | POST | `/api/applications/{code}/secret/rotate` | 密钥轮换 |
-| 授权 | POST | `/api/users/{id}/applications/{code}/authorize` | 授权 |
-| 授权 | POST | `/api/users/{id}/applications/{code}/deauthorize` | 取消授权 |
+| 应用 | POST | `/api/applications/{code}/secret/revoke` | 撤销密钥 |
+| 准入 | GET | `/api/users/{id}/application-access` | 查询准入期望状态 |
+| 准入 | PUT | `/api/users/{id}/application-access/{code}` | 保存期望状态，202/待应用适配，不执行远程同步 |
 | SSO | GET | `/sso/authorize` | SSO 浏览器流程 |
 | SSO | POST | `/openapi/sso/tickets/exchange` | 兑换 code |
 | Ticket | POST | `/openapi/admin-tickets/verify` | 校验管理 ticket |
 | 审计 | GET | `/api/audit-logs` | 查询审计日志 |
 
-完整 API 文档见 [docs/architecture.md](docs/architecture.md)。
+管理端契约以 [openapi/account-api.yaml](openapi/account-api.yaml) 为准。应用/准入写操作要求管理员 Session、CSRF、`Idempotency-Key`，更新携带资源 `version`。Secret 仅创建/轮换成功时展示一次，同键重试不重放明文；普通查询不返回 Secret。架构说明见 [docs/architecture.md](docs/architecture.md)。
 
 ## 应用接入
 
@@ -135,7 +137,7 @@ Spring Boot 业务应用引入 `account-center-spring-boot-starter` 即可同时
 
 - `/` — 首页导航
 - `/users` — 用户管理与授权
-- `/applications` — 应用管理
+- `/applications` — 跳转 `/console/applications`（由独立 account-web 提供）
 - `/audit-logs` — 审计日志
 - `/login` — 登录
 

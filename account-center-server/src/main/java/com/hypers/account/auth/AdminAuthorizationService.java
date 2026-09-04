@@ -20,6 +20,10 @@ public class AdminAuthorizationService {
     public static final String ACCOUNT_AUDITOR = "ACCOUNT_AUDITOR";
     public static final String USERS_READ = "users:read";
     public static final String USERS_WRITE = "users:write";
+    public static final String APPLICATIONS_READ = "applications:read";
+    public static final String APPLICATIONS_WRITE = "applications:write";
+    public static final String ACCESS_READ = "application-access:read";
+    public static final String ACCESS_WRITE = "application-access:write";
 
     private final AdminRoleMapper adminRoleMapper;
 
@@ -58,9 +62,13 @@ public class AdminAuthorizationService {
         Set<String> capabilities = new LinkedHashSet<>();
         if (roles.contains(ACCOUNT_ADMIN) || roles.contains(ACCOUNT_AUDITOR)) {
             capabilities.add(USERS_READ);
+            capabilities.add(APPLICATIONS_READ);
+            capabilities.add(ACCESS_READ);
         }
         if (roles.contains(ACCOUNT_ADMIN)) {
             capabilities.add(USERS_WRITE);
+            capabilities.add(APPLICATIONS_WRITE);
+            capabilities.add(ACCESS_WRITE);
         }
         return Collections.unmodifiableList(new ArrayList<>(capabilities));
     }

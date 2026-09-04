@@ -51,12 +51,46 @@ public class IdempotencyService {
                             requestHash,
                             responseStatus,
                             responseType,
+                            true,
                             action));
         } catch (DuplicateKeyException exception) {
             IdempotencyRecord concurrent = recordMapper.selectActive(
                     operatorId, requestMethod, requestPath, idempotencyKey, clock.instant());
             if (concurrent != null) {
-                return replay(concurrent, requestHash, responseType);
+                return replay(concurrent, requestHash, responseType, true);
+            }
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_IN_PROGRESS", "相同请求正在处理中，请稍后重试");
+        }
+    }
+
+    public <T> T executeNonReplayable(String operatorId,
+                                      String requestMethod,
+                                      String requestPath,
+                                      String idempotencyKey,
+                                      Object request,
+                                      int responseStatus,
+                                      Class<T> responseType,
+                                      Supplier<T> action) {
+        validateKey(idempotencyKey);
+        String requestHash = fingerprint(request);
+        try {
+            return new TransactionTemplate(transactionManager).execute(transactionStatus ->
+                    executeInTransaction(
+                            operatorId,
+                            requestMethod,
+                            requestPath,
+                            idempotencyKey,
+                            requestHash,
+                            responseStatus,
+                            responseType,
+                            false,
+                            action));
+        } catch (DuplicateKeyException exception) {
+            IdempotencyRecord concurrent = recordMapper.selectActive(
+                    operatorId, requestMethod, requestPath, idempotencyKey, clock.instant());
+            if (concurrent != null) {
+                return replay(concurrent, requestHash, responseType, false);
             }
             throw new ApiException(HttpStatus.CONFLICT,
                     "IDEMPOTENCY_IN_PROGRESS", "相同请求正在处理中，请稍后重试");
@@ -70,12 +104,13 @@ public class IdempotencyService {
                                        String requestHash,
                                        int responseStatus,
                                        Class<T> responseType,
+                                       boolean replayable,
                                        Supplier<T> action) {
         Instant now = clock.instant();
         IdempotencyRecord existing = recordMapper.selectActive(
                 operatorId, requestMethod, requestPath, idempotencyKey, now);
         if (existing != null) {
-            return replay(existing, requestHash, responseType);
+            return replay(existing, requestHash, responseType, replayable);
         }
 
         recordMapper.deleteExpiredScope(operatorId, requestMethod, requestPath, idempotencyKey, now);
@@ -95,7 +130,7 @@ public class IdempotencyService {
 
         try {
             T response = action.get();
-            String responseBody = objectMapper.writeValueAsString(response);
+            String responseBody = replayable ? objectMapper.writeValueAsString(response) : "{}";
             int updated = recordMapper.complete(
                     record.getId(), responseStatus, responseBody, clock.instant().plus(COMPLETED_TTL));
             if (updated != 1) {
@@ -107,7 +142,10 @@ public class IdempotencyService {
         }
     }
 
-    private <T> T replay(IdempotencyRecord existing, String requestHash, Class<T> responseType) {
+    private <T> T replay(IdempotencyRecord existing,
+                         String requestHash,
+                         Class<T> responseType,
+                         boolean replayable) {
         if (!MessageDigest.isEqual(
                 existing.getRequestHash().getBytes(StandardCharsets.UTF_8),
                 requestHash.getBytes(StandardCharsets.UTF_8))) {
@@ -117,6 +155,11 @@ public class IdempotencyService {
         if (!"completed".equals(existing.getStatus()) || existing.getResponseBody() == null) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "IDEMPOTENCY_IN_PROGRESS", "相同请求正在处理中，请稍后重试");
+        }
+        if (!replayable) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_RESULT_NOT_REPLAYABLE",
+                    "该操作已完成；敏感结果不会再次显示，请刷新资源状态");
         }
         try {
             return objectMapper.readValue(existing.getResponseBody(), responseType);

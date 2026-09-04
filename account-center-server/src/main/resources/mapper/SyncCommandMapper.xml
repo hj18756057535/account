@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hypers.account.mapper.SyncCommandMapper">
+
+    <insert id="insert">
+        insert into account_sync_commands (
+            id, idempotency_key, user_id, app_code, desired_status, sync_version,
+            status, attempts, trace_id, created_at
+        ) values (
+            #{command.id}, #{command.idempotencyKey}, #{command.userId}, #{command.appCode},
+            #{command.desiredStatus}, #{command.syncVersion}, #{command.status},
+            #{command.attempts}, #{command.traceId}, #{command.createdAt}
+        )
+    </insert>
+
+</mapper>

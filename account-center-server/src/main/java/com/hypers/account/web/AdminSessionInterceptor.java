@@ -49,7 +49,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
     private boolean hasRequiredRole(HttpServletRequest request, AccountSessionUser sessionUser) {
         String userId = sessionUser.getUserId();
         String requestUri = request.getRequestURI();
-        if (isUserReadRequest(request.getMethod(), requestUri)) {
+        if (isManagementReadRequest(request.getMethod(), requestUri)) {
             return authorizationService.canReadUsers(userId);
         }
         if (request.getRequestURI().startsWith("/audit-logs")) {
@@ -61,12 +61,20 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
     private boolean isConsoleApiRequest(String requestUri) {
         return "/api/session".equals(requestUri)
                 || "/api/users".equals(requestUri)
-                || requestUri.startsWith("/api/users/");
+                || requestUri.startsWith("/api/users/")
+                || "/api/applications".equals(requestUri)
+                || requestUri.startsWith("/api/applications/");
     }
 
-    private boolean isUserReadRequest(String method, String requestUri) {
+    private boolean isManagementReadRequest(String method, String requestUri) {
         if (!"GET".equals(method)) {
             return false;
+        }
+        if ("/api/applications".equals(requestUri) || requestUri.startsWith("/api/applications/")) {
+            return true;
+        }
+        if (requestUri.matches("/api/users/[^/]+/application-access")) {
+            return true;
         }
         if ("/api/users".equals(requestUri)) {
             return true;

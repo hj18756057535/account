@@ -1,5 +1,6 @@
 package com.hypers.account.web;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -103,8 +104,13 @@ class ManagementApiIntegrationTest {
                 .andExpect(jsonPath("$.authenticated").value(true))
                 .andExpect(jsonPath("$.user.account").value("console-admin"))
                 .andExpect(jsonPath("$.roles[0]").value("ACCOUNT_ADMIN"))
-                .andExpect(jsonPath("$.capabilities[0]").value("users:read"))
-                .andExpect(jsonPath("$.capabilities[1]").value("users:write"))
+                .andExpect(jsonPath("$.capabilities", containsInAnyOrder(
+                        "users:read",
+                        "users:write",
+                        "applications:read",
+                        "applications:write",
+                        "application-access:read",
+                        "application-access:write")))
                 .andExpect(jsonPath("$.password").doesNotExist());
 
         mockMvc.perform(delete("/api/session")

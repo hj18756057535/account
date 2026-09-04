@@ -48,17 +48,35 @@ class AccountApiIntegrationTest {
 
     @Test
     void fullUserAndApplicationCrudFlow() throws Exception {
-        String applicationBody = "{\"appCode\":\"cms-ai\",\"name\":\"Carbon Service\",\"entryUrl\":\"http://localhost:9003\",\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\",\"permissionIframeUrl\":\"http://localhost:9003/account-admin/users/{externalUserId}/permissions\",\"notifyBaseUrl\":\"http://localhost:9003\",\"secret\":\"secret\",\"defaultTenantCode\":\"default\"}";
+        MvcResult sessionResult = mockMvc.perform(get("/api/session")).andReturn();
+        MockHttpSession managementSession =
+                (MockHttpSession) sessionResult.getRequest().getSession(false);
+        managementSession.setAttribute(AuthController.SESSION_USER_KEY, adminSession());
+        String csrfToken = objectMapper.readTree(sessionResult.getResponse().getContentAsString())
+                .get("csrfToken").asText();
+        String applicationBody = "{\"appCode\":\"cms-ai\",\"name\":\"Carbon Service\","
+                + "\"entryUrl\":\"http://localhost:9003\","
+                + "\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\","
+                + "\"permissionIframeUrl\":\"http://localhost:9003/permissions\","
+                + "\"notifyBaseUrl\":\"http://localhost:9003/notify\","
+                + "\"defaultTenantCode\":\"default\","
+                + "\"protocolCapabilities\":[\"sso\",\"admin_ticket\",\"user_sync\"]}";
 
-        mockMvc.perform(post("/api/applications")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
+        MvcResult applicationResult = mockMvc.perform(post("/api/applications")
+                        .session(managementSession)
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-create-app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(applicationBody))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.appCode").value("cms-ai"))
-                .andExpect(jsonPath("$.status").value("enabled"))
-                .andExpect(jsonPath("$.secretVersion").value(1))
-                .andExpect(jsonPath("$.secret").doesNotExist());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.application.appCode").value("cms-ai"))
+                .andExpect(jsonPath("$.application.status").value("enabled"))
+                .andExpect(jsonPath("$.application.secretVersion").value(1))
+                .andExpect(jsonPath("$.application.secret").doesNotExist())
+                .andExpect(jsonPath("$.secret").isNotEmpty())
+                .andReturn();
+        String newSecret = objectMapper.readTree(applicationResult.getResponse().getContentAsString())
+                .get("secret").asText();
 
         mockMvc.perform(get("/api/applications/cms-ai")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
@@ -66,47 +84,64 @@ class AccountApiIntegrationTest {
                 .andExpect(jsonPath("$.name").value("Carbon Service"))
                 .andExpect(jsonPath("$.secret").doesNotExist());
 
-        mockMvc.perform(get("/api/applications?keyword=cms")
+        mockMvc.perform(get("/api/applications?query=cms")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].appCode").value("cms-ai"))
                 .andExpect(jsonPath("$[0].secret").doesNotExist());
 
-        String updatedApplicationBody = applicationBody.replace("Carbon Service", "Carbon Service v2");
+        String updatedApplicationBody = "{\"name\":\"Carbon Service v2\","
+                + "\"entryUrl\":\"http://localhost:9003\","
+                + "\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\","
+                + "\"permissionIframeUrl\":\"http://localhost:9003/permissions\","
+                + "\"notifyBaseUrl\":\"http://localhost:9003/notify\","
+                + "\"defaultTenantCode\":\"default\","
+                + "\"protocolCapabilities\":[\"sso\",\"admin_ticket\",\"user_sync\"],"
+                + "\"version\":1}";
         mockMvc.perform(put("/api/applications/cms-ai")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
+                        .session(managementSession)
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-update-app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updatedApplicationBody))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Carbon Service v2"));
+                .andExpect(jsonPath("$.name").value("Carbon Service v2"))
+                .andExpect(jsonPath("$.version").value(2));
 
-        mockMvc.perform(post("/api/applications/cms-ai/disable")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(put("/api/applications/cms-ai/status")
+                        .session(managementSession)
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-disable-app")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"disabled\",\"version\":2,\"reason\":\"全流程停用\"}"))
+                .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/applications/cms-ai")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("disabled"));
 
-        mockMvc.perform(post("/api/applications/cms-ai/enable")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(put("/api/applications/cms-ai/status")
+                        .session(managementSession)
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-enable-app")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"enabled\",\"version\":3,\"reason\":\"全流程恢复\"}"))
+                .andExpect(status().isOk());
 
         MvcResult rotateResult = mockMvc.perform(post("/api/applications/cms-ai/secret/rotate")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
+                        .session(managementSession)
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-rotate-app")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":4,\"reason\":\"全流程轮换\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.newSecret").isNotEmpty())
+                .andExpect(jsonPath("$.secret").isNotEmpty())
                 .andReturn();
-        String newSecret = objectMapper.readTree(rotateResult.getResponse().getContentAsString()).get("newSecret").asText();
-        assertThat(newSecret).isNotEqualTo("secret");
-
-        MvcResult sessionResult = mockMvc.perform(get("/api/session")).andReturn();
-        MockHttpSession managementSession =
-                (MockHttpSession) sessionResult.getRequest().getSession(false);
-        managementSession.setAttribute(AuthController.SESSION_USER_KEY, adminSession());
-        String csrfToken = objectMapper.readTree(sessionResult.getResponse().getContentAsString())
-                .get("csrfToken").asText();
+        String rotatedSecret = objectMapper.readTree(rotateResult.getResponse().getContentAsString())
+                .get("secret").asText();
+        assertThat(rotatedSecret).isNotEqualTo(newSecret);
+        newSecret = rotatedSecret;
 
         MvcResult userResult = mockMvc.perform(post("/api/users")
                         .session(managementSession)
@@ -141,10 +176,13 @@ class AccountApiIntegrationTest {
                 .andExpect(jsonPath("$.email").value("new@example.com"))
                 .andExpect(jsonPath("$.version").value(2));
 
-        mockMvc.perform(post("/api/users/{userId}/applications/{appCode}/authorize", userId, "cms-ai")
+        mockMvc.perform(put("/api/users/{userId}/application-access/{appCode}", userId, "cms-ai")
                         .session(managementSession)
-                        .header(CsrfTokenManager.HEADER_NAME, csrfToken))
-                .andExpect(status().isNoContent());
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-enable-access")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"enabled\",\"version\":0,\"reason\":\"全流程开通\"}"))
+                .andExpect(status().isAccepted());
 
         mockMvc.perform(get("/api/users/" + userId + "/applications")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
@@ -200,10 +238,13 @@ class AccountApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.version").value(4));
 
-        mockMvc.perform(post("/api/users/{userId}/applications/{appCode}/deauthorize", userId, "cms-ai")
+        mockMvc.perform(put("/api/users/{userId}/application-access/{appCode}", userId, "cms-ai")
                         .session(managementSession)
-                        .header(CsrfTokenManager.HEADER_NAME, csrfToken))
-                .andExpect(status().isNoContent());
+                        .header(CsrfTokenManager.HEADER_NAME, csrfToken)
+                        .header("Idempotency-Key", "full-flow-disable-access")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"disabled\",\"version\":1,\"reason\":\"全流程关闭\"}"))
+                .andExpect(status().isAccepted());
 
         mockMvc.perform(get("/api/users/" + userId + "/applications")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))

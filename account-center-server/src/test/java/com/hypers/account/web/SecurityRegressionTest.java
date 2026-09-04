@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.app.AccountApplication;
 import com.hypers.account.app.AccountDirectoryService;
 import com.hypers.account.app.AccountUser;
@@ -17,13 +18,16 @@ import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.security.HmacSignatureService;
 import com.hypers.account.sso.AccountUserSnapshot;
 import com.hypers.account.sso.SsoTicketService;
+import com.hypers.account.web.management.CsrfTokenManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
@@ -33,6 +37,9 @@ class SecurityRegressionTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private AccountDirectoryService directoryService;
@@ -71,23 +78,34 @@ class SecurityRegressionTest {
 
     @Test
     void applicationSecretIsWriteOnlyInApiResponses() throws Exception {
+        ManagementSession management = managementSession();
         mockMvc.perform(post("/api/applications")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
+                        .session(management.session())
+                        .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
+                        .header("Idempotency-Key", "secret-write-only")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"appCode\":\"secret-app\",\"name\":\"密钥应用\",\"entryUrl\":\"http://localhost:9003\",\"ssoCallbackUrl\":\"http://localhost:9003/callback\",\"permissionIframeUrl\":\"http://localhost:9003/permissions\",\"notifyBaseUrl\":\"http://localhost:9003\",\"secret\":\"super-secret\",\"defaultTenantCode\":\"default\"}"))
+                        .content(applicationBody("secret-app", "http://localhost:9003/notify")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.application.appCode").value("secret-app"))
+                .andExpect(jsonPath("$.application.secret").doesNotExist())
+                .andExpect(jsonPath("$.secret").isNotEmpty());
+
+        mockMvc.perform(get("/api/applications/secret-app").session(management.session()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.appCode").value("secret-app"))
-                .andExpect(jsonPath("$.secret").doesNotExist())
-                .andExpect(content().string(not(org.hamcrest.Matchers.containsString("super-secret"))));
+                .andExpect(jsonPath("$.secret").doesNotExist());
     }
 
     @Test
     void applicationRegistrationRejectsUnsupportedUrlScheme() throws Exception {
+        ManagementSession management = managementSession();
         mockMvc.perform(post("/api/applications")
-                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
+                        .session(management.session())
+                        .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
+                        .header("Idempotency-Key", "bad-url-scheme")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"appCode\":\"bad-url-app\",\"name\":\"URL 应用\",\"entryUrl\":\"http://example.com\",\"ssoCallbackUrl\":\"http://example.com/callback\",\"permissionIframeUrl\":\"http://example.com/permissions\",\"notifyBaseUrl\":\"file:///etc/passwd\",\"secret\":\"super-secret\",\"defaultTenantCode\":\"default\"}"))
-                .andExpect(status().isBadRequest());
+                        .content(applicationBody("bad-url-app", "file:///etc/passwd")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test
@@ -195,6 +213,28 @@ class SecurityRegressionTest {
 
     private AccountSessionUser adminSession() {
         return new AccountSessionUser("admin-user", "admin", "管理员");
+    }
+
+    private String applicationBody(String appCode, String notifyBaseUrl) {
+        return "{\"appCode\":\"" + appCode + "\",\"name\":\"密钥应用\","
+                + "\"entryUrl\":\"http://localhost:9003\","
+                + "\"ssoCallbackUrl\":\"http://localhost:9003/callback\","
+                + "\"permissionIframeUrl\":\"http://localhost:9003/permissions\","
+                + "\"notifyBaseUrl\":\"" + notifyBaseUrl + "\","
+                + "\"defaultTenantCode\":\"default\","
+                + "\"protocolCapabilities\":[\"sso\"]}";
+    }
+
+    private ManagementSession managementSession() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/session")).andReturn();
+        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+        session.setAttribute(AuthController.SESSION_USER_KEY, adminSession());
+        String csrfToken = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("csrfToken").asText();
+        return new ManagementSession(session, csrfToken);
+    }
+
+    private record ManagementSession(MockHttpSession session, String csrfToken) {
     }
 
     private org.springframework.http.HttpHeaders signedHeaders(String appCode, String secret, String path, String body) {

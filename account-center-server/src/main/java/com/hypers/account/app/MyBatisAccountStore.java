@@ -3,6 +3,7 @@ package com.hypers.account.app;
 import com.hypers.account.mapper.AccountApplicationMapper;
 import com.hypers.account.mapper.AccountUserApplicationMapper;
 import com.hypers.account.mapper.AccountUserMapper;
+import com.hypers.account.mapper.SyncCommandMapper;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,7 @@ public class MyBatisAccountStore implements AccountStore {
     private final AccountUserMapper userMapper;
     private final AccountApplicationMapper applicationMapper;
     private final AccountUserApplicationMapper userApplicationMapper;
+    private final SyncCommandMapper syncCommandMapper;
 
     @Override
     public AccountUser saveNewUser(SaveUserCommand command) {
@@ -101,6 +103,41 @@ public class MyBatisAccountStore implements AccountStore {
     }
 
     @Override
+    public AccountApplication createManagedApplication(SaveApplicationCommand command, String operatorId) {
+        AccountApplication app = new AccountApplication(
+                command.getAppCode(),
+                command.getName(),
+                command.getEntryUrl(),
+                command.getSsoCallbackUrl(),
+                command.getPermissionIframeUrl(),
+                command.getNotifyBaseUrl(),
+                command.getSecret(),
+                normalizeTenant(command.getDefaultTenantCode()));
+        app.setProtocolCapabilities(command.getProtocolCapabilities());
+        app.setCreatedBy(operatorId);
+        try {
+            applicationMapper.insert(app);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ApplicationAlreadyExistsException();
+        }
+        return requireApplication(command.getAppCode());
+    }
+
+    @Override
+    public AccountApplication updateManagedApplication(SaveApplicationCommand command, String operatorId) {
+        requireApplication(command.getAppCode());
+        SaveApplicationCommand normalized = new SaveApplicationCommand(
+                command.getAppCode(), command.getName(), command.getEntryUrl(), command.getSsoCallbackUrl(),
+                command.getPermissionIframeUrl(), command.getNotifyBaseUrl(),
+                normalizeTenant(command.getDefaultTenantCode()), command.getProtocolCapabilities(),
+                null, command.getExpectedVersion());
+        if (applicationMapper.updateManaged(normalized, operatorId) == 0) {
+            throw new ResourceVersionConflictException();
+        }
+        return requireApplication(command.getAppCode());
+    }
+
+    @Override
     public AccountUser requireUser(String userId) {
         AccountUser user = userMapper.selectById(userId);
         if (user == null) {
@@ -133,6 +170,48 @@ public class MyBatisAccountStore implements AccountStore {
     @Override
     public List<AccountApplication> findAuthorizedApplications(String userId) {
         return userApplicationMapper.selectAuthorizedApplications(userId);
+    }
+
+    @Override
+    public List<ApplicationAccess> findApplicationAccess(String userId) {
+        return userApplicationMapper.selectAccessByUser(userId);
+    }
+
+    @Override
+    public ApplicationAccess requireApplicationAccess(String userId, String appCode) {
+        ApplicationAccess access = userApplicationMapper.selectAccess(userId, appCode);
+        if (access == null) {
+            throw new IllegalArgumentException("application access not found");
+        }
+        return access;
+    }
+
+    @Override
+    public ApplicationAccess saveApplicationAccess(String userId,
+                                                   String appCode,
+                                                   String desiredStatus,
+                                                   long expectedVersion,
+                                                   String operatorId) {
+        ApplicationAccess existing = userApplicationMapper.selectAccess(userId, appCode);
+        if (existing == null) {
+            if (expectedVersion != 0) {
+                throw new ResourceVersionConflictException();
+            }
+            try {
+                userApplicationMapper.insertAccess(userId, appCode, desiredStatus, operatorId);
+            } catch (DataIntegrityViolationException exception) {
+                throw new ResourceVersionConflictException();
+            }
+        } else if (userApplicationMapper.updateAccessVersioned(
+                userId, appCode, desiredStatus, expectedVersion, operatorId) == 0) {
+            throw new ResourceVersionConflictException();
+        }
+        return requireApplicationAccess(userId, appCode);
+    }
+
+    @Override
+    public void saveSyncCommand(ApplicationSyncCommand command) {
+        syncCommandMapper.insert(command);
     }
 
     @Override
@@ -182,8 +261,45 @@ public class MyBatisAccountStore implements AccountStore {
     }
 
     @Override
+    public AccountApplication updateManagedApplicationStatus(String appCode,
+                                                             String status,
+                                                             long expectedVersion,
+                                                             String operatorId) {
+        requireApplication(appCode);
+        if (applicationMapper.updateStatusVersioned(appCode, status, expectedVersion, operatorId) == 0) {
+            throw new ResourceVersionConflictException();
+        }
+        return requireApplication(appCode);
+    }
+
+    @Override
     public void rotateApplicationSecret(String appCode, String newSecret, int newVersion) {
         applicationMapper.updateSecret(appCode, newSecret, newVersion);
+    }
+
+    @Override
+    public AccountApplication rotateManagedApplicationSecret(String appCode,
+                                                              String newSecret,
+                                                              int newSecretVersion,
+                                                              long expectedVersion,
+                                                              String operatorId) {
+        requireApplication(appCode);
+        if (applicationMapper.rotateSecretVersioned(
+                appCode, newSecret, newSecretVersion, expectedVersion, operatorId) == 0) {
+            throw new ResourceVersionConflictException();
+        }
+        return requireApplication(appCode);
+    }
+
+    @Override
+    public AccountApplication revokeManagedApplicationSecret(String appCode,
+                                                              long expectedVersion,
+                                                              String operatorId) {
+        requireApplication(appCode);
+        if (applicationMapper.revokeSecretVersioned(appCode, expectedVersion, operatorId) == 0) {
+            throw new ResourceVersionConflictException();
+        }
+        return requireApplication(appCode);
     }
 
     @Override
@@ -194,5 +310,12 @@ public class MyBatisAccountStore implements AccountStore {
     @Override
     public void setUserPassword(String userId, String encodedPassword) {
         userMapper.updatePassword(userId, encodedPassword);
+    }
+
+    private String normalizeTenant(String tenantCode) {
+        return Optional.ofNullable(tenantCode)
+                .filter(value -> !value.trim().isEmpty())
+                .map(String::trim)
+                .orElse("default");
     }
 }

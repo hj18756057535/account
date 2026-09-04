@@ -9,6 +9,8 @@ servers:
 tags:
   - name: Session
   - name: Users
+  - name: Applications
+  - name: ApplicationAccess
   - name: Integration
 paths:
   /api/session:
@@ -252,6 +254,257 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+  /api/applications:
+    get:
+      tags: [Applications]
+      operationId: listApplications
+      summary: 查询已登记应用
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: query
+          in: query
+          schema:
+            type: string
+            maxLength: 128
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ApplicationStatus'
+      responses:
+        '200':
+          description: 应用列表，任何响应均不包含 Secret
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+    post:
+      tags: [Applications]
+      operationId: createApplication
+      summary: 登记应用并生成首个 Secret
+      description: >-
+        Secret 仅在首次成功响应中显示。相同幂等键重放不会再次显示 Secret，返回 409；
+        调用方遗失后必须执行轮换。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+      responses:
+        '201':
+          description: 应用已登记，Secret 只在本响应中显示
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSecretResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/applications/{appCode}:
+    get:
+      tags: [Applications]
+      operationId: getApplication
+      summary: 查询应用详情
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/AppCode'
+      responses:
+        '200':
+          description: 应用详情，不含 Secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Applications]
+      operationId: updateApplication
+      summary: 更新应用配置
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApplicationRequest'
+      responses:
+        '200':
+          description: 更新后的应用，version 单调递增
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/applications/{appCode}/status:
+    put:
+      tags: [Applications]
+      operationId: changeApplicationStatus
+      summary: 启用或禁用应用
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeApplicationStatusRequest'
+      responses:
+        '200':
+          description: 状态已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/applications/{appCode}/secret/rotate:
+    post:
+      tags: [Applications]
+      operationId: rotateApplicationSecret
+      summary: 轮换应用 Secret
+      description: 新 Secret 仅显示一次，幂等重放不会再次返回敏感结果。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedReasonRequest'
+      responses:
+        '200':
+          description: Secret 已轮换
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationSecretResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/applications/{appCode}/secret/revoke:
+    post:
+      tags: [Applications]
+      operationId: revokeApplicationSecret
+      summary: 撤销应用 Secret
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionedReasonRequest'
+      responses:
+        '200':
+          description: Secret 已撤销，后续签名请求将被拒绝
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/users/{userId}/application-access:
+    get:
+      tags: [ApplicationAccess]
+      operationId: listUserApplicationAccess
+      summary: 查询用户对所有应用的准入期望状态
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: 未配置应用以 disabled、version=0 返回
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationAccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/users/{userId}/application-access/{appCode}:
+    put:
+      tags: [ApplicationAccess]
+      operationId: changeUserApplicationAccess
+      summary: 修改用户准入期望状态
+      description: >-
+        当前只持久化期望状态和待投递命令，不启动 Outbox Worker；
+        integrationStatus 固定为 pending_application_adaptation。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeApplicationAccessRequest'
+      responses:
+        '202':
+          description: 期望状态已保存，业务应用仍待适配
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationAccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
   /openapi/sso/tickets/exchange:
     post:
       tags: [Integration]
@@ -354,6 +607,21 @@ components:
         minLength: 1
         maxLength: 128
       description: 按操作者、方法和规范化资源路径隔离，完成结果至少保留 24 小时
+    AppCode:
+      name: appCode
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z][a-z0-9-]{0,63}$'
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
   responses:
     Unauthorized:
       description: 未登录或 Session 已失效
@@ -422,7 +690,13 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: ['users:read', 'users:write']
+            enum:
+              - 'users:read'
+              - 'users:write'
+              - 'applications:read'
+              - 'applications:write'
+              - 'application-access:read'
+              - 'application-access:write'
         csrfToken:
           type: string
           minLength: 32
@@ -551,6 +825,255 @@ components:
           type: integer
           format: int64
           minimum: 0
+    ApplicationStatus:
+      type: string
+      enum: [enabled, disabled]
+    ApplicationProtocolCapability:
+      type: string
+      enum: [sso, admin_ticket, user_sync]
+    ApplicationSecretState:
+      type: string
+      enum: [active, revoked]
+    CreateApplicationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - appCode
+        - name
+        - entryUrl
+        - ssoCallbackUrl
+        - permissionIframeUrl
+        - notifyBaseUrl
+        - protocolCapabilities
+      properties:
+        appCode:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{0,63}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        entryUrl:
+          type: string
+          format: uri
+          maxLength: 512
+        ssoCallbackUrl:
+          type: string
+          format: uri
+          maxLength: 512
+          description: 精确回调 URI，不接受通配符或 fragment
+        permissionIframeUrl:
+          type: string
+          maxLength: 512
+          description: 精确授权页 URI，可包含 {externalUserId} 路径占位符
+        notifyBaseUrl:
+          type: string
+          format: uri
+          maxLength: 512
+        defaultTenantCode:
+          type: [string, 'null']
+          maxLength: 64
+        protocolCapabilities:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ApplicationProtocolCapability'
+    UpdateApplicationRequest:
+      unevaluatedProperties: false
+      allOf:
+        - $ref: '#/components/schemas/CreateApplicationFields'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              type: integer
+              format: int64
+              minimum: 1
+    CreateApplicationFields:
+      type: object
+      required:
+        - name
+        - entryUrl
+        - ssoCallbackUrl
+        - permissionIframeUrl
+        - notifyBaseUrl
+        - protocolCapabilities
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        entryUrl:
+          type: string
+          format: uri
+          maxLength: 512
+        ssoCallbackUrl:
+          type: string
+          format: uri
+          maxLength: 512
+        permissionIframeUrl:
+          type: string
+          maxLength: 512
+        notifyBaseUrl:
+          type: string
+          format: uri
+          maxLength: 512
+        defaultTenantCode:
+          type: [string, 'null']
+          maxLength: 64
+        protocolCapabilities:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ApplicationProtocolCapability'
+    ApplicationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - appCode
+        - name
+        - entryUrl
+        - ssoCallbackUrl
+        - permissionIframeUrl
+        - notifyBaseUrl
+        - defaultTenantCode
+        - status
+        - version
+        - secretVersion
+        - secretState
+        - protocolCapabilities
+      properties:
+        appCode:
+          type: string
+        name:
+          type: string
+        entryUrl:
+          type: string
+          format: uri
+        ssoCallbackUrl:
+          type: string
+          format: uri
+        permissionIframeUrl:
+          type: string
+        notifyBaseUrl:
+          type: string
+          format: uri
+        defaultTenantCode:
+          type: string
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        secretVersion:
+          type: integer
+          minimum: 1
+        secretState:
+          $ref: '#/components/schemas/ApplicationSecretState'
+        protocolCapabilities:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ApplicationProtocolCapability'
+        createdAt:
+          type: [string, 'null']
+          format: date-time
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+    ApplicationSecretResponse:
+      type: object
+      additionalProperties: false
+      required: [application, secret]
+      properties:
+        application:
+          $ref: '#/components/schemas/ApplicationResponse'
+        secret:
+          type: string
+          minLength: 32
+          description: 仅在本次成功响应中显示，不得写入浏览器持久化、日志或截图
+    VersionedReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [version, reason]
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ChangeApplicationStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, version, reason]
+      properties:
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ChangeApplicationAccessRequest:
+      type: object
+      additionalProperties: false
+      required: [status, version, reason]
+      properties:
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 256
+    ApplicationAccessResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - userId
+        - appCode
+        - applicationName
+        - applicationStatus
+        - desiredStatus
+        - version
+        - integrationStatus
+      properties:
+        userId:
+          type: string
+        appCode:
+          type: string
+        applicationName:
+          type: string
+        applicationStatus:
+          $ref: '#/components/schemas/ApplicationStatus'
+        desiredStatus:
+          $ref: '#/components/schemas/ApplicationStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 0
+        integrationStatus:
+          type: string
+          enum: [pending_application_adaptation]
+        syncCommandId:
+          type: [string, 'null']
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
     ErrorResponse:
       type: object
       additionalProperties: false

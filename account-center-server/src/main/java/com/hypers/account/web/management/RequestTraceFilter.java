@@ -23,7 +23,9 @@ public class RequestTraceFilter extends OncePerRequestFilter {
         String requestUri = request.getRequestURI();
         return !"/api/session".equals(requestUri)
                 && !"/api/users".equals(requestUri)
-                && !requestUri.startsWith("/api/users/");
+                && !requestUri.startsWith("/api/users/")
+                && !"/api/applications".equals(requestUri)
+                && !requestUri.startsWith("/api/applications/");
     }
 
     @Override
@@ -33,6 +35,7 @@ public class RequestTraceFilter extends OncePerRequestFilter {
         String traceId = UUID.randomUUID().toString().replace("-", "");
         request.setAttribute(TRACE_ID_ATTRIBUTE, traceId);
         response.setHeader(TRACE_ID_HEADER, traceId);
+        response.setHeader("Cache-Control", "no-store");
         filterChain.doFilter(request, response);
     }
 

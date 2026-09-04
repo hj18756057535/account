@@ -1,7 +1,11 @@
 package com.hypers.account.app;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -18,6 +22,16 @@ public class AccountDirectoryService {
     public AccountApplication registerApplication(RegisterApplicationCommand command) {
         urlValidator.validate(command);
         return store.saveApplication(command);
+    }
+
+    public AccountApplication createManagedApplication(SaveApplicationCommand command, String operatorId) {
+        urlValidator.validate(command);
+        return store.createManagedApplication(command, operatorId);
+    }
+
+    public AccountApplication updateManagedApplication(SaveApplicationCommand command, String operatorId) {
+        urlValidator.validate(command);
+        return store.updateManagedApplication(command, operatorId);
     }
 
     public AccountUser createUser(SaveUserCommand command) {
@@ -86,6 +100,42 @@ public class AccountDirectoryService {
         return store.updateUser(userId, command);
     }
 
+    public List<ApplicationAccess> getUserApplicationAccess(String userId) {
+        store.requireUser(userId);
+        Map<String, ApplicationAccess> configured = store.findApplicationAccess(userId).stream()
+                .collect(Collectors.toMap(ApplicationAccess::getAppCode, Function.identity()));
+        List<ApplicationAccess> result = new ArrayList<>();
+        for (AccountApplication application : store.findApplications(null, null)) {
+            result.add(configured.getOrDefault(application.getAppCode(), new ApplicationAccess(
+                    userId,
+                    application.getAppCode(),
+                    "disabled",
+                    0,
+                    "pending_application_adaptation",
+                    null,
+                    null)));
+        }
+        return result;
+    }
+
+    public ApplicationAccess changeUserApplicationAccess(String userId,
+                                                         String appCode,
+                                                         String desiredStatus,
+                                                         long expectedVersion,
+                                                         String operatorId,
+                                                         ApplicationSyncCommand syncCommand) {
+        store.requireUser(userId);
+        AccountApplication application = store.requireApplication(appCode);
+        if ("enabled".equals(desiredStatus) && "disabled".equals(application.getStatus())) {
+            throw new IllegalStateException("application is disabled");
+        }
+        ApplicationAccess access = store.saveApplicationAccess(
+                userId, appCode, desiredStatus, expectedVersion, operatorId);
+        store.saveSyncCommand(syncCommand);
+        access.setSyncCommandId(syncCommand.getId());
+        return access;
+    }
+
     public AccountUser updateManagedUser(String userId,
                                          SaveUserCommand command,
                                          long expectedVersion,
@@ -129,11 +179,34 @@ public class AccountDirectoryService {
         store.updateApplicationStatus(appCode, "disabled");
     }
 
+    public AccountApplication changeManagedApplicationStatus(String appCode,
+                                                             String status,
+                                                             long expectedVersion,
+                                                             String operatorId) {
+        return store.updateManagedApplicationStatus(appCode, status, expectedVersion, operatorId);
+    }
+
     public String rotateApplicationSecret(String appCode) {
         AccountApplication app = store.requireApplication(appCode);
         String newSecret = UUID.randomUUID().toString().replace("-", "");
         int newVersion = (app.getSecretVersion() != null ? app.getSecretVersion() : 0) + 1;
         store.rotateApplicationSecret(appCode, newSecret, newVersion);
         return newSecret;
+    }
+
+    public AccountApplication rotateManagedApplicationSecret(String appCode,
+                                                              String secret,
+                                                              long expectedVersion,
+                                                              String operatorId) {
+        AccountApplication application = store.requireApplication(appCode);
+        int nextSecretVersion = (application.getSecretVersion() == null ? 0 : application.getSecretVersion()) + 1;
+        return store.rotateManagedApplicationSecret(
+                appCode, secret, nextSecretVersion, expectedVersion, operatorId);
+    }
+
+    public AccountApplication revokeManagedApplicationSecret(String appCode,
+                                                              long expectedVersion,
+                                                              String operatorId) {
+        return store.revokeManagedApplicationSecret(appCode, expectedVersion, operatorId);
     }
 }

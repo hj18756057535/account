@@ -3,6 +3,7 @@ package com.hypers.account.web;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hypers.account.auth.AccountSessionUser;
@@ -37,15 +38,15 @@ class HomePageTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Account Center")))
                 .andExpect(content().string(containsString("/console/users")))
-                .andExpect(content().string(containsString("/applications")));
+                .andExpect(content().string(containsString("/console/applications")));
     }
 
     @Test
-    void applicationsPageContainsApplicationListAndManagement() throws Exception {
+    void applicationsPageRedirectsToConsole() throws Exception {
         mockMvc.perform(get("/applications")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("/api/applications")));
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/console/applications"));
     }
 
     private AccountSessionUser adminSession() {

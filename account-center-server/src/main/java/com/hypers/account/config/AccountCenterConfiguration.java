@@ -18,6 +18,7 @@ import com.hypers.account.mapper.AccountUserMapper;
 import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.mapper.AdminTicketMapper;
 import com.hypers.account.mapper.AuditLogMapper;
+import com.hypers.account.mapper.SyncCommandMapper;
 import com.hypers.account.security.HmacSignatureService;
 import com.hypers.account.sso.SsoTicketService;
 import java.time.Clock;
@@ -48,8 +49,9 @@ public class AccountCenterConfiguration {
     @ConditionalOnProperty(name = "account.store.type", havingValue = "mybatis", matchIfMissing = true)
     public AccountStore myBatisAccountStore(AccountUserMapper userMapper,
                                             AccountApplicationMapper applicationMapper,
-                                            AccountUserApplicationMapper userApplicationMapper) {
-        return new MyBatisAccountStore(userMapper, applicationMapper, userApplicationMapper);
+                                            AccountUserApplicationMapper userApplicationMapper,
+                                            SyncCommandMapper syncCommandMapper) {
+        return new MyBatisAccountStore(userMapper, applicationMapper, userApplicationMapper, syncCommandMapper);
     }
 
     @Bean

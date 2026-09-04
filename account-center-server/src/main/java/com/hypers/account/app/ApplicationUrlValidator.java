@@ -18,7 +18,18 @@ public class ApplicationUrlValidator {
         validateHttpUrl("notifyBaseUrl", command.getNotifyBaseUrl());
     }
 
+    public void validate(SaveApplicationCommand command) {
+        validateHttpUrl("entryUrl", command.getEntryUrl());
+        validateHttpUrl("ssoCallbackUrl", command.getSsoCallbackUrl());
+        validateHttpUrl("permissionIframeUrl",
+                command.getPermissionIframeUrl().replace("{externalUserId}", "externalUserId"));
+        validateHttpUrl("notifyBaseUrl", command.getNotifyBaseUrl());
+    }
+
     private void validateHttpUrl(String field, String value) {
+        if (value == null || value.contains("*")) {
+            throw new IllegalArgumentException(field + " must be an exact URL");
+        }
         URI uri = parse(field, value);
         String scheme = uri.getScheme();
         if (scheme == null || !HTTP_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT))) {
@@ -29,6 +40,9 @@ public class ApplicationUrlValidator {
         }
         if (uri.getUserInfo() != null) {
             throw new IllegalArgumentException(field + " must not contain user info");
+        }
+        if (uri.getFragment() != null) {
+            throw new IllegalArgumentException(field + " must not contain a fragment");
         }
     }
 

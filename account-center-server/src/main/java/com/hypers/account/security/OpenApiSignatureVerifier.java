@@ -45,6 +45,9 @@ public class OpenApiSignatureVerifier {
         if ("disabled".equals(application.getStatus())) {
             throw unauthorized("application is disabled");
         }
+        if ("revoked".equals(application.getSecretState())) {
+            throw unauthorized("application secret is revoked");
+        }
         String signText = request.getMethod()
                 + "\n" + request.getRequestURI()
                 + "\n" + timestamp

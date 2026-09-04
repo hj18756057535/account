@@ -16,15 +16,37 @@
         <result property="defaultTenantCode" column="default_tenant_code"/>
         <result property="status" column="status"/>
         <result property="secretVersion" column="secret_version"/>
+        <result property="secretState" column="secret_state"/>
+        <result property="protocolCapabilities" column="protocol_capabilities"/>
+        <result property="version" column="application_version"/>
         <result property="createdBy" column="created_by"/>
         <result property="updatedBy" column="updated_by"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <resultMap id="applicationAccessResultMap" type="com.hypers.account.app.ApplicationAccess">
+        <result property="userId" column="user_id"/>
+        <result property="appCode" column="app_code"/>
+        <result property="desiredStatus" column="desired_status"/>
+        <result property="version" column="version"/>
+        <result property="integrationStatus" column="integration_status"/>
+        <result property="syncCommandId" column="sync_command_id"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
     <!-- 授权：建立用户-应用关联 -->
     <insert id="insert">
         insert into account_user_applications (user_id, app_code) values (#{userId}, #{appCode})
+    </insert>
+
+    <insert id="insertAccess">
+        insert into account_user_applications (
+            user_id, app_code, status, desired_status, version, authorized_by, updated_by, updated_at
+        ) values (
+            #{userId}, #{appCode}, #{desiredStatus}, #{desiredStatus}, 1,
+            #{operatorId}, #{operatorId}, current_timestamp
+        )
     </insert>
 
     <!-- 取消授权：删除用户-应用关联 -->
@@ -34,18 +56,47 @@
 
     <!-- 判断用户是否已授权某应用（0=未授权，>0=已授权） -->
     <select id="countByUserAndApp" resultType="int">
-        select count(*) from account_user_applications where user_id = #{userId} and app_code = #{appCode}
+        select count(*) from account_user_applications
+        where user_id = #{userId} and app_code = #{appCode} and status = 'enabled'
     </select>
 
     <!-- 查询用户已授权的所有应用（JOIN 应用表获取完整信息） -->
     <select id="selectAuthorizedApplications" resultMap="applicationResultMap">
         select a.app_code, a.name, a.entry_url, a.sso_callback_url, a.permission_iframe_url,
                a.notify_base_url, a.secret, a.default_tenant_code, a.status, a.secret_version,
+               a.secret_state, a.protocol_capabilities, a.version as application_version,
                a.created_by, a.updated_by, a.created_at, a.updated_at
         from account_applications a
         join account_user_applications ua on ua.app_code = a.app_code
-        where ua.user_id = #{userId}
+        where ua.user_id = #{userId} and ua.status = 'enabled'
         order by a.app_code
     </select>
+
+    <select id="selectAccessByUser" resultMap="applicationAccessResultMap">
+        select ua.user_id, ua.app_code, ua.desired_status, ua.version,
+               'pending_application_adaptation' as integration_status,
+               null as sync_command_id,
+               ua.updated_at
+        from account_user_applications ua
+        where ua.user_id = #{userId}
+        order by ua.app_code
+    </select>
+
+    <select id="selectAccess" resultMap="applicationAccessResultMap">
+        select ua.user_id, ua.app_code, ua.desired_status, ua.version,
+               'pending_application_adaptation' as integration_status,
+               null as sync_command_id,
+               ua.updated_at
+        from account_user_applications ua
+        where ua.user_id = #{userId} and ua.app_code = #{appCode}
+    </select>
+
+    <update id="updateAccessVersioned">
+        update account_user_applications
+        set status = #{desiredStatus}, desired_status = #{desiredStatus},
+            version = version + 1, updated_by = #{operatorId}, updated_at = current_timestamp,
+            deauthorized_at = case when #{desiredStatus} = 'disabled' then current_timestamp else null end
+        where user_id = #{userId} and app_code = #{appCode} and version = #{expectedVersion}
+    </update>
 
 </mapper>

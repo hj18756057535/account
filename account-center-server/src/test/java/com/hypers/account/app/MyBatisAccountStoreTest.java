@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.hypers.account.mapper.AccountApplicationMapper;
 import com.hypers.account.mapper.AccountUserApplicationMapper;
 import com.hypers.account.mapper.AccountUserMapper;
+import com.hypers.account.mapper.SyncCommandMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,9 +24,13 @@ class MyBatisAccountStoreTest {
     @Autowired
     private AccountUserApplicationMapper userApplicationMapper;
 
+    @Autowired
+    private SyncCommandMapper syncCommandMapper;
+
     @Test
     void myBatisStorePersistsUsersApplicationsAndAuthorizationsAcrossInstances() {
-        AccountStore store = new MyBatisAccountStore(userMapper, applicationMapper, userApplicationMapper);
+        AccountStore store = new MyBatisAccountStore(
+                userMapper, applicationMapper, userApplicationMapper, syncCommandMapper);
         AccountApplication application = store.saveApplication(new RegisterApplicationCommand(
                 "cms-ai",
                 "双碳服务",
