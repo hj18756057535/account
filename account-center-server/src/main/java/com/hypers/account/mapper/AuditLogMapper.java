@@ -1,6 +1,7 @@
 package com.hypers.account.mapper;
 
 import com.hypers.account.audit.AuditLog;
+import com.hypers.account.audit.AuditPageQuery;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -12,6 +13,12 @@ import java.util.List;
  */
 @Mapper
 public interface AuditLogMapper {
+
+    long countEvents(@Param("query") AuditPageQuery query);
+
+    List<AuditLog> selectEvents(@Param("query") AuditPageQuery query);
+
+    AuditLog selectEvent(@Param("id") String id);
 
     /** 新增审计日志 */
     void insert(@Param("log") AuditLog log);

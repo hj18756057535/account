@@ -24,7 +24,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
         if (sessionUser == null) {
             if (isConsoleApiRequest(request.getRequestURI())) {
                 apiErrorWriter.write(request, response, HttpServletResponse.SC_UNAUTHORIZED,
-                        "AUTHENTICATION_REQUIRED", "登录状态已失效，请重新登录");
+                        "AUTHENTICATION_REQUIRED", "error.authentication");
                 return false;
             }
             if (request.getRequestURI().startsWith("/api/")) {
@@ -39,7 +39,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
         }
         if (isConsoleApiRequest(request.getRequestURI())) {
             apiErrorWriter.write(request, response, HttpServletResponse.SC_FORBIDDEN,
-                    "ACCESS_DENIED", "当前账号没有执行此操作的权限");
+                    "ACCESS_DENIED", "error.accessDenied");
             return false;
         }
         response.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -63,12 +63,17 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
                 || "/api/users".equals(requestUri)
                 || requestUri.startsWith("/api/users/")
                 || "/api/applications".equals(requestUri)
-                || requestUri.startsWith("/api/applications/");
+                || requestUri.startsWith("/api/applications/")
+                || "/api/audit-events".equals(requestUri)
+                || requestUri.startsWith("/api/audit-events/");
     }
 
     private boolean isManagementReadRequest(String method, String requestUri) {
         if (!"GET".equals(method)) {
             return false;
+        }
+        if ("/api/audit-events".equals(requestUri) || requestUri.startsWith("/api/audit-events/")) {
+            return true;
         }
         if ("/api/applications".equals(requestUri) || requestUri.startsWith("/api/applications/")) {
             return true;

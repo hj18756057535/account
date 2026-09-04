@@ -4,6 +4,9 @@ info:
   version: 1.0.0
   description: >-
     Account 管理端同源 Session API。浏览器不得持有应用 Secret、Session ID 或长期 Token。
+    管理端 message/fieldErrors 根据可选 Accept-Language 返回中文或英文；支持 zh/en 地区变体与权重，
+    缺失、不支持或非法头回退 zh-CN。响应包含 Content-Language 和 Vary: Accept-Language。
+    错误码、字段名、状态值及用户业务数据不随语言变化。
 servers:
   - url: /
 tags:
@@ -12,6 +15,7 @@ tags:
   - name: Applications
   - name: ApplicationAccess
   - name: Integration
+  - name: Audit
 paths:
   /api/session:
     get:
@@ -555,6 +559,76 @@ paths:
                 $ref: '#/components/schemas/AdminTicketVerifyResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/audit-events:
+    get:
+      tags: [Audit]
+      operationId: listAuditEvents
+      summary: 分页查询脱敏审计事件
+      description: Admin/Auditor 只读；精确筛选；固定按 createdAt desc、id desc 排序，不返回原始 detail。
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: operatorId
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: operationType
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: targetType
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: targetId
+          in: query
+          schema: { type: string, maxLength: 128 }
+        - name: traceId
+          in: query
+          schema: { type: string, maxLength: 64 }
+      responses:
+        '200':
+          description: 脱敏事件分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventPageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/audit-events/{id}:
+    get:
+      tags: [Audit]
+      operationId: getAuditEvent
+      summary: 获取脱敏审计事件详情
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64 }
+      responses:
+        '200':
+          description: 只读事件，不返回原始 detail 或票据目标标识
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
 components:
   securitySchemes:
     sessionCookie:
@@ -654,6 +728,33 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    AuditEventResponse:
+      type: object
+      additionalProperties: false
+      required: [id, operatorId, operationType, targetType, targetId, outcome, traceId, createdAt]
+      properties:
+        id: { type: string }
+        operatorId: { type: [string, 'null'] }
+        operationType: { type: string }
+        targetType: { type: [string, 'null'] }
+        targetId:
+          type: [string, 'null']
+          description: 仅 USER、APPLICATION、USER_APPLICATION 管理目标公开，其他类型隐藏。
+        outcome: { type: string, enum: [success, failure, unknown] }
+        traceId: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    AuditEventPageResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEventResponse'
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, format: int64, minimum: 0 }
     LoginRequest:
       type: object
       additionalProperties: false

@@ -1,11 +1,15 @@
 package com.hypers.account.audit;
 
 import java.time.Instant;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 操作审计日志实体。
  * 记录 Account Center 所有关键管理操作。
  */
+@Getter
+@Setter
 public class AuditLog {
 
     private String id;
@@ -15,6 +19,8 @@ public class AuditLog {
     private String targetId;
     private String detail;
     private Instant createdAt;
+    private String traceId;
+    private String outcome = "unknown";
 
     public AuditLog() {
     }
@@ -29,18 +35,4 @@ public class AuditLog {
         this.detail = detail;
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
-    public String getOperatorId() { return operatorId; }
-    public void setOperatorId(String operatorId) { this.operatorId = operatorId; }
-    public String getOperationType() { return operationType; }
-    public void setOperationType(String operationType) { this.operationType = operationType; }
-    public String getTargetType() { return targetType; }
-    public void setTargetType(String targetType) { this.targetType = targetType; }
-    public String getTargetId() { return targetId; }
-    public void setTargetId(String targetId) { this.targetId = targetId; }
-    public String getDetail() { return detail; }
-    public void setDetail(String detail) { this.detail = detail; }
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

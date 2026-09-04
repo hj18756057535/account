@@ -38,9 +38,9 @@ public class ManagementApplicationWriteService {
             return new CreatedApplication(application, secret);
         } catch (ApplicationAlreadyExistsException exception) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "APPLICATION_ALREADY_EXISTS", "应用编码已存在");
+                    "APPLICATION_ALREADY_EXISTS", "error.applicationExists");
         } catch (IllegalArgumentException exception) {
-            throw validation("url", "应用地址必须是精确的 HTTP 或 HTTPS 地址");
+            throw validation("url", "validation.url");
         }
     }
 
@@ -57,7 +57,7 @@ public class ManagementApplicationWriteService {
             if ("application not found".equals(exception.getMessage())) {
                 throw notFound();
             }
-            throw validation("url", "应用地址必须是精确的 HTTP 或 HTTPS 地址");
+            throw validation("url", "validation.url");
         }
     }
 
@@ -150,13 +150,13 @@ public class ManagementApplicationWriteService {
             return access;
         } catch (ResourceVersionConflictException exception) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "RESOURCE_VERSION_CONFLICT", "准入状态已被其他操作更新，请刷新后重试");
+                    "RESOURCE_VERSION_CONFLICT", "error.accessConflict");
         } catch (IllegalStateException exception) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "APPLICATION_DISABLED", "已禁用的应用不能启用用户准入");
+                    "APPLICATION_DISABLED", "error.applicationDisabled");
         } catch (IllegalArgumentException exception) {
             throw new ApiException(HttpStatus.NOT_FOUND,
-                    "RESOURCE_NOT_FOUND", "未找到指定用户或应用");
+                    "RESOURCE_NOT_FOUND", "error.resourceNotFound");
         }
     }
 
@@ -175,17 +175,17 @@ public class ManagementApplicationWriteService {
 
     private ApiException versionConflict() {
         return new ApiException(HttpStatus.CONFLICT,
-                "RESOURCE_VERSION_CONFLICT", "应用已被其他操作更新，请刷新后重试");
+                "RESOURCE_VERSION_CONFLICT", "error.applicationConflict");
     }
 
     private ApiException notFound() {
         return new ApiException(HttpStatus.NOT_FOUND,
-                "APPLICATION_NOT_FOUND", "未找到指定应用");
+                "APPLICATION_NOT_FOUND", "error.applicationNotFound");
     }
 
     private ApiException validation(String field, String message) {
         return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                "VALIDATION_FAILED", "请求字段校验失败",
+                "VALIDATION_FAILED", "error.validation",
                 java.util.Collections.singletonMap(field, message));
     }
 

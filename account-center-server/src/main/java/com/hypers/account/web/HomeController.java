@@ -8,7 +8,7 @@ public class HomeController {
 
     @GetMapping("/")
     public String home() {
-        return "home";
+        return "redirect:/console/users";
     }
 
     @GetMapping("/applications")
@@ -18,6 +18,6 @@ public class HomeController {
 
     @GetMapping("/audit-logs")
     public String auditLogs() {
-        return "audit-logs";
+        return "redirect:/console/audit-events";
     }
 }

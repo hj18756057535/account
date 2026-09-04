@@ -1,5 +1,7 @@
 package com.hypers.account.web.management;
 
+import com.hypers.account.web.ApiMessages;
+import lombok.RequiredArgsConstructor;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,16 +17,19 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackages = "com.hypers.account.web.management")
+@RequiredArgsConstructor
 public class ApiExceptionHandler {
+
+    private final ApiMessages messages;
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiErrorResponse> handleApiException(ApiException exception,
                                                                 HttpServletRequest request) {
         return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(
                 exception.getCode(),
-                exception.getMessage(),
+                messages.text(request, exception.getMessage()),
                 RequestTraceFilter.traceId(request),
-                exception.getFieldErrors()));
+                messages.fields(request, exception.getFieldErrors())));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -32,11 +37,11 @@ public class ApiExceptionHandler {
                                                               HttpServletRequest request) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError error : exception.getBindingResult().getFieldErrors()) {
-            fieldErrors.putIfAbsent(error.getField(), error.getDefaultMessage());
+            fieldErrors.putIfAbsent(error.getField(), messages.text(request, error.getDefaultMessage()));
         }
         return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse(
                 "VALIDATION_FAILED",
-                "请求字段校验失败",
+                messages.text(request, "error.validation"),
                 RequestTraceFilter.traceId(request),
                 fieldErrors));
     }
@@ -46,7 +51,7 @@ public class ApiExceptionHandler {
                                                                   HttpServletRequest request) {
         return ResponseEntity.unprocessableEntity().body(new ApiErrorResponse(
                 "VALIDATION_FAILED",
-                "请求内容无法解析",
+                messages.text(request, "error.unreadable"),
                 RequestTraceFilter.traceId(request)));
     }
 
@@ -55,7 +60,7 @@ public class ApiExceptionHandler {
                                                               HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiErrorResponse(
                 "INTERNAL_ERROR",
-                "服务暂时不可用，请稍后重试",
+                messages.text(request, "error.internal"),
                 RequestTraceFilter.traceId(request)));
     }
 }

@@ -58,11 +58,11 @@ public class ManagementApplicationController {
             @RequestParam(required = false) String status) {
         String normalizedStatus = normalize(status);
         if (normalizedStatus != null && !APPLICATION_STATUSES.contains(normalizedStatus)) {
-            throw validation("status", "应用状态只能是 enabled 或 disabled");
+            throw validation("status", "validation.applicationStatus");
         }
         String normalizedQuery = normalize(query);
         if (normalizedQuery != null && normalizedQuery.length() > 128) {
-            throw validation("query", "搜索内容长度不能超过 128 个字符");
+            throw validation("query", "validation.query.size");
         }
         return directoryService.findApplications(normalizedQuery, normalizedStatus).stream()
                 .map(ApplicationResponse::from)
@@ -93,7 +93,7 @@ public class ManagementApplicationController {
             return ApplicationResponse.from(directoryService.getApplication(appCode));
         } catch (IllegalArgumentException exception) {
             throw new ApiException(HttpStatus.NOT_FOUND,
-                    "APPLICATION_NOT_FOUND", "未找到指定应用");
+                    "APPLICATION_NOT_FOUND", "error.applicationNotFound");
         }
     }
 
@@ -187,7 +187,7 @@ public class ManagementApplicationController {
                     .map(access -> ApplicationAccessResponse.from(access, applications.get(access.getAppCode())))
                     .collect(Collectors.toList());
         } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "未找到指定用户");
+            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "error.userNotFound");
         }
     }
 
@@ -229,19 +229,19 @@ public class ManagementApplicationController {
 
     private void validateAppCode(String appCode) {
         if (appCode == null || !appCode.matches("[a-z][a-z0-9-]{0,63}")) {
-            throw validation("appCode", "应用编码格式不正确");
+            throw validation("appCode", "validation.appCode.format");
         }
     }
 
     private void validateUserId(String userId) {
         if (userId == null || userId.isEmpty() || userId.length() > 64) {
-            throw validation("userId", "用户标识格式不正确");
+            throw validation("userId", "validation.userId");
         }
     }
 
     private ApiException validation(String field, String message) {
         return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                "VALIDATION_FAILED", "请求字段校验失败",
+                "VALIDATION_FAILED", "error.validation",
                 Collections.singletonMap(field, message));
     }
 
@@ -253,8 +253,8 @@ public class ManagementApplicationController {
     @Setter
     public static class CreateApplicationRequest extends ApplicationFieldsRequest {
 
-        @NotBlank(message = "应用编码不能为空")
-        @Pattern(regexp = "[a-z][a-z0-9-]{0,63}", message = "应用编码只能包含小写字母、数字和连字符")
+        @NotBlank(message = "validation.appCode.required")
+        @Pattern(regexp = "[a-z][a-z0-9-]{0,63}", message = "validation.appCode.pattern")
         private String appCode;
 
         public SaveApplicationCommand toCommand() {
@@ -266,7 +266,7 @@ public class ManagementApplicationController {
     @Setter
     public static class UpdateApplicationRequest extends ApplicationFieldsRequest {
 
-        @Min(value = 1, message = "资源版本必须大于 0")
+        @Min(value = 1, message = "validation.version.positive")
         private long version;
 
         public SaveApplicationCommand toCommand(String appCode) {
@@ -278,34 +278,34 @@ public class ManagementApplicationController {
     @Setter
     public abstract static class ApplicationFieldsRequest {
 
-        @NotBlank(message = "应用名称不能为空")
-        @Size(max = 128, message = "应用名称长度不能超过 128 个字符")
+        @NotBlank(message = "validation.appName.required")
+        @Size(max = 128, message = "validation.appName.size")
         private String name;
-        @NotBlank(message = "入口地址不能为空")
-        @Size(max = 512, message = "入口地址长度不能超过 512 个字符")
+        @NotBlank(message = "validation.entryUrl.required")
+        @Size(max = 512, message = "validation.entryUrl.size")
         private String entryUrl;
-        @NotBlank(message = "SSO 回调地址不能为空")
-        @Size(max = 512, message = "SSO 回调地址长度不能超过 512 个字符")
+        @NotBlank(message = "validation.callback.required")
+        @Size(max = 512, message = "validation.callback.size")
         private String ssoCallbackUrl;
-        @NotBlank(message = "授权页地址不能为空")
-        @Size(max = 512, message = "授权页地址长度不能超过 512 个字符")
+        @NotBlank(message = "validation.permissionUrl.required")
+        @Size(max = 512, message = "validation.permissionUrl.size")
         private String permissionIframeUrl;
-        @NotBlank(message = "同步通知地址不能为空")
-        @Size(max = 512, message = "同步通知地址长度不能超过 512 个字符")
+        @NotBlank(message = "validation.notifyUrl.required")
+        @Size(max = 512, message = "validation.notifyUrl.size")
         private String notifyBaseUrl;
-        @Size(max = 64, message = "默认租户编码长度不能超过 64 个字符")
+        @Size(max = 64, message = "validation.tenant.size")
         private String defaultTenantCode;
-        @NotEmpty(message = "至少选择一项协议能力")
-        @Size(max = 3, message = "协议能力数量不能超过 3")
-        private List<@NotNull(message = "协议能力不能为空")
-                @Pattern(regexp = "sso|admin_ticket|user_sync", message = "协议能力不受支持") String>
+        @NotEmpty(message = "validation.protocol.notEmpty")
+        @Size(max = 3, message = "validation.protocol.size")
+        private List<@NotNull(message = "validation.protocol.required")
+                @Pattern(regexp = "sso|admin_ticket|user_sync", message = "validation.protocol.supported") String>
                 protocolCapabilities;
 
         protected SaveApplicationCommand toCommand(String appCode, long version) {
             if (new java.util.HashSet<>(protocolCapabilities).size() != protocolCapabilities.size()) {
                 throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "VALIDATION_FAILED", "请求字段校验失败",
-                        Collections.singletonMap("protocolCapabilities", "协议能力不能重复"));
+                        "VALIDATION_FAILED", "error.validation",
+                        Collections.singletonMap("protocolCapabilities", "validation.protocol.unique"));
             }
             String protocols = protocolCapabilities.stream()
                     .distinct()
@@ -329,8 +329,8 @@ public class ManagementApplicationController {
     @Setter
     public static class ChangeApplicationStatusRequest extends VersionedReasonRequest {
 
-        @NotNull(message = "状态不能为空")
-        @Pattern(regexp = "enabled|disabled", message = "状态只能是 enabled 或 disabled")
+        @NotNull(message = "validation.status.required")
+        @Pattern(regexp = "enabled|disabled", message = "validation.status.pattern")
         private String status;
     }
 
@@ -338,14 +338,14 @@ public class ManagementApplicationController {
     @Setter
     public static class ChangeApplicationAccessRequest {
 
-        @NotNull(message = "状态不能为空")
-        @Pattern(regexp = "enabled|disabled", message = "状态只能是 enabled 或 disabled")
+        @NotNull(message = "validation.status.required")
+        @Pattern(regexp = "enabled|disabled", message = "validation.status.pattern")
         private String status;
-        @NotNull(message = "资源版本不能为空")
-        @Min(value = 0, message = "资源版本不能小于 0")
+        @NotNull(message = "validation.version.required")
+        @Min(value = 0, message = "validation.version.nonnegative")
         private Long version;
-        @NotBlank(message = "变更原因不能为空")
-        @Size(max = 256, message = "变更原因不能超过 256 个字符")
+        @NotBlank(message = "validation.reason.required")
+        @Size(max = 256, message = "validation.reason.size")
         private String reason;
     }
 
@@ -353,10 +353,10 @@ public class ManagementApplicationController {
     @Setter
     public static class VersionedReasonRequest {
 
-        @Min(value = 1, message = "资源版本必须大于 0")
+        @Min(value = 1, message = "validation.version.positive")
         private long version;
-        @NotBlank(message = "变更原因不能为空")
-        @Size(max = 256, message = "变更原因不能超过 256 个字符")
+        @NotBlank(message = "validation.reason.required")
+        @Size(max = 256, message = "validation.reason.size")
         private String reason;
     }
 

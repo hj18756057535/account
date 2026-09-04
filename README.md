@@ -2,6 +2,13 @@
 
 内部统一账户中心，提供用户管理、应用准入授权和 SSO 单点登录能力。
 
+## 当前需求与数据库结构
+
+- 需求正文统一保存在工作区 `requirements/features/ACCOUNT-001/requirement.md`；执行范围以 `.agent-work/ACCOUNT-001/` 中已批准的规格、设计和计划为准。旧后端需求/SSO 计划已移除，保留 [架构说明](docs/architecture.md) 与 [接入指南](docs/integration-guide.md)。
+- [建表参考与字段说明](account-center-server/src/main/resources/db/schema.sql) 为 V1～V5 的合并结构，不作为初始化入口。启动时 Flyway 执行公共迁移，再按数据库类型加载 `db/vendor` 下的 V6，补齐 9 张表、87 个字段的数据库 COMMENT。
+- 已运行项目：保留连接配置，构建并重启后查看 V6 成功日志，再刷新数据库客户端元数据；无需重建表或重新执行 schema.sql。PostgreSQL/H2 使用 COMMENT ON；MySQL 使用 V1～V5 列属性加 COMMENT，并要求 INPLACE/LOCK=NONE。MySQL 如有手工改列或特殊字符集，先核对结构，不直接套用。
+- H2 已验证 V5 升级、原列属性/约束/数据不变及重复启动；PostgreSQL/MySQL 实库尚未验证。失败时保留日志与历史，不盲目 repair、删表或改写旧迁移。回退应用时保留 V6 历史并确认旧制品兼容；更正注释使用新迁移。
+
 ## 功能特性
 
 - **用户管理** — 用户 CRUD、启用/禁用、按关键字搜索

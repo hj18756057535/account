@@ -110,6 +110,7 @@ class ManagementApiIntegrationTest {
                         "applications:read",
                         "applications:write",
                         "application-access:read",
+                        "audit:read",
                         "application-access:write")))
                 .andExpect(jsonPath("$.password").doesNotExist());
 

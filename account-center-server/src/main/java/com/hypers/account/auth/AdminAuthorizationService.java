@@ -24,6 +24,7 @@ public class AdminAuthorizationService {
     public static final String APPLICATIONS_WRITE = "applications:write";
     public static final String ACCESS_READ = "application-access:read";
     public static final String ACCESS_WRITE = "application-access:write";
+    public static final String AUDIT_READ = "audit:read";
 
     private final AdminRoleMapper adminRoleMapper;
 
@@ -64,6 +65,7 @@ public class AdminAuthorizationService {
             capabilities.add(USERS_READ);
             capabilities.add(APPLICATIONS_READ);
             capabilities.add(ACCESS_READ);
+            capabilities.add(AUDIT_READ);
         }
         if (roles.contains(ACCOUNT_ADMIN)) {
             capabilities.add(USERS_WRITE);

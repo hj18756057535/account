@@ -29,7 +29,7 @@ public class CsrfInterceptor implements HandlerInterceptor {
             return true;
         }
         errorWriter.write(request, response, HttpServletResponse.SC_FORBIDDEN,
-                "CSRF_INVALID", "请求校验已失效，请刷新页面后重试");
+                "CSRF_INVALID", "error.csrf");
         return false;
     }
 }

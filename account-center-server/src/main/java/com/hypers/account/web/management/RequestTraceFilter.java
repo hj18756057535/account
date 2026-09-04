@@ -1,5 +1,6 @@
 package com.hypers.account.web.management;
 
+import com.hypers.account.audit.AuditLogService;
 import java.io.IOException;
 import java.util.UUID;
 import jakarta.servlet.FilterChain;
@@ -10,6 +11,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.slf4j.MDC;
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -25,7 +27,9 @@ public class RequestTraceFilter extends OncePerRequestFilter {
                 && !"/api/users".equals(requestUri)
                 && !requestUri.startsWith("/api/users/")
                 && !"/api/applications".equals(requestUri)
-                && !requestUri.startsWith("/api/applications/");
+                && !requestUri.startsWith("/api/applications/")
+                && !"/api/audit-events".equals(requestUri)
+                && !requestUri.startsWith("/api/audit-events/");
     }
 
     @Override
@@ -36,7 +40,14 @@ public class RequestTraceFilter extends OncePerRequestFilter {
         request.setAttribute(TRACE_ID_ATTRIBUTE, traceId);
         response.setHeader(TRACE_ID_HEADER, traceId);
         response.setHeader("Cache-Control", "no-store");
-        filterChain.doFilter(request, response);
+        String previousTrace = MDC.get(AuditLogService.TRACE_CONTEXT_KEY);
+        MDC.put(AuditLogService.TRACE_CONTEXT_KEY, traceId);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            if (previousTrace == null) MDC.remove(AuditLogService.TRACE_CONTEXT_KEY);
+            else MDC.put(AuditLogService.TRACE_CONTEXT_KEY, previousTrace);
+        }
     }
 
     public static String traceId(HttpServletRequest request) {

@@ -1,6 +1,7 @@
 package com.hypers.account.web.management;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hypers.account.web.ApiMessages;
 import java.io.IOException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class ApiErrorWriter {
 
     private final ObjectMapper objectMapper;
+    private final ApiMessages messages;
 
     public void write(HttpServletRequest request,
                       HttpServletResponse response,
@@ -24,7 +26,7 @@ public class ApiErrorWriter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getWriter(), new ApiErrorResponse(
                 code,
-                message,
+                messages.text(request, message),
                 RequestTraceFilter.traceId(request)));
     }
 }

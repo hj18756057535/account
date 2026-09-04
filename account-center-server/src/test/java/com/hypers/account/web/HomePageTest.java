@@ -1,8 +1,6 @@
 package com.hypers.account.web;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -33,12 +31,18 @@ class HomePageTest {
     }
 
     @Test
-    void homePageLinksToUserAuthorizationAndApplicationManagementPages() throws Exception {
+    void homePageRedirectsToConsole() throws Exception {
         mockMvc.perform(get("/"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Account Center")))
-                .andExpect(content().string(containsString("/console/users")))
-                .andExpect(content().string(containsString("/console/applications")));
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/console/users"));
+    }
+
+    @Test
+    void auditPageRedirectsToConsole() throws Exception {
+        mockMvc.perform(get("/audit-logs")
+                        .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/console/audit-events"));
     }
 
     @Test

@@ -50,14 +50,14 @@ public class ManagementSessionController {
             user = loginService.authenticate(loginRequest.getAccount(), loginRequest.getPassword());
         } catch (IllegalArgumentException exception) {
             throw new ApiException(HttpStatus.UNAUTHORIZED,
-                    "INVALID_CREDENTIALS", "账号或密码错误");
+                    "INVALID_CREDENTIALS", "error.credentials");
         }
         List<String> roles = authorizationService.findRoles(user.getUserId());
         if (!roles.contains(AdminAuthorizationService.ACCOUNT_ADMIN)
                 && !roles.contains(AdminAuthorizationService.ACCOUNT_AUDITOR)) {
             request.getSession(false).invalidate();
             throw new ApiException(HttpStatus.FORBIDDEN,
-                    "MANAGEMENT_ACCESS_DENIED", "当前账号没有管理端访问权限");
+                    "MANAGEMENT_ACCESS_DENIED", "error.managementDenied");
         }
         request.changeSessionId();
         HttpSession session = request.getSession(false);
@@ -91,11 +91,11 @@ public class ManagementSessionController {
     @Setter
     public static class LoginRequest {
 
-        @NotBlank(message = "请输入账号")
-        @Size(max = 128, message = "账号长度不能超过 128 个字符")
+        @NotBlank(message = "validation.loginAccount.required")
+        @Size(max = 128, message = "validation.account.size")
         private String account;
-        @NotBlank(message = "请输入密码")
-        @Size(max = 256, message = "密码长度不能超过 256 个字符")
+        @NotBlank(message = "validation.password.required")
+        @Size(max = 256, message = "validation.password.size")
         private String password;
 
     }

@@ -93,7 +93,7 @@ public class ManagementUserController {
         try {
             return UserResponse.from(directoryService.getUser(userId));
         } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "未找到指定用户");
+            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "error.userNotFound");
         }
     }
 
@@ -147,23 +147,23 @@ public class ManagementUserController {
                                   String status,
                                   String sort) {
         if (page < 1) {
-            throw validation("page", "页码必须从 1 开始");
+            throw validation("page", "validation.page");
         }
         if (size < 1 || size > 100) {
-            throw validation("size", "每页数量必须在 1 到 100 之间");
+            throw validation("size", "validation.size");
         }
         String normalizedStatus = normalize(status);
         if (normalizedStatus != null && !USER_STATUSES.contains(normalizedStatus)) {
-            throw validation("status", "用户状态只能是 enabled 或 disabled");
+            throw validation("status", "validation.userStatus");
         }
         String[] sortParts = sort == null ? new String[0] : sort.split(",", -1);
         if (sortParts.length != 2 || !SORT_FIELDS.contains(sortParts[0])
                 || !SORT_DIRECTIONS.contains(sortParts[1].toLowerCase(Locale.ROOT))) {
-            throw validation("sort", "排序格式不受支持");
+            throw validation("sort", "validation.sort");
         }
         String normalizedKeyword = normalize(keyword);
         if (normalizedKeyword != null && normalizedKeyword.length() > 128) {
-            throw validation("query", "搜索内容长度不能超过 128 个字符");
+            throw validation("query", "validation.query.size");
         }
         return new UserPageQuery(
                 page,
@@ -176,12 +176,12 @@ public class ManagementUserController {
 
     private ApiException validation(String field, String message) {
         return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                "VALIDATION_FAILED", "请求字段校验失败", java.util.Collections.singletonMap(field, message));
+                "VALIDATION_FAILED", "error.validation", java.util.Collections.singletonMap(field, message));
     }
 
     private void validateUserId(String userId) {
         if (userId == null || userId.isEmpty() || userId.length() > 64) {
-            throw validation("userId", "用户标识格式不正确");
+            throw validation("userId", "validation.userId");
         }
     }
 
@@ -240,18 +240,18 @@ public class ManagementUserController {
     @Setter
     public static class CreateUserRequest {
 
-        @NotBlank(message = "账号不能为空")
-        @Size(max = 128, message = "账号长度不能超过 128 个字符")
+        @NotBlank(message = "validation.account.required")
+        @Size(max = 128, message = "validation.account.size")
         private String account;
-        @NotBlank(message = "邮箱不能为空")
-        @Email(message = "邮箱格式不正确")
-        @Size(max = 255, message = "邮箱长度不能超过 255 个字符")
+        @NotBlank(message = "validation.email.required")
+        @Email(message = "validation.email.format")
+        @Size(max = 255, message = "validation.email.size")
         private String email;
-        @NotBlank(message = "姓名不能为空")
-        @Size(max = 128, message = "姓名长度不能超过 128 个字符")
+        @NotBlank(message = "validation.name.required")
+        @Size(max = 128, message = "validation.name.size")
         private String name;
-        @NotBlank(message = "手机号不能为空")
-        @Size(max = 64, message = "手机号长度不能超过 64 个字符")
+        @NotBlank(message = "validation.phone.required")
+        @Size(max = 64, message = "validation.phone.size")
         private String phone;
 
         public SaveUserCommand toCommand() {
@@ -263,7 +263,7 @@ public class ManagementUserController {
     @Setter
     public static class UpdateUserRequest extends CreateUserRequest {
 
-        @Min(value = 1, message = "资源版本必须大于 0")
+        @Min(value = 1, message = "validation.version.positive")
         private long version;
     }
 
@@ -271,13 +271,13 @@ public class ManagementUserController {
     @Setter
     public static class ChangeUserStatusRequest {
 
-        @NotNull(message = "状态不能为空")
-        @Pattern(regexp = "enabled|disabled", message = "状态只能是 enabled 或 disabled")
+        @NotNull(message = "validation.status.required")
+        @Pattern(regexp = "enabled|disabled", message = "validation.status.pattern")
         private String status;
-        @Min(value = 1, message = "资源版本必须大于 0")
+        @Min(value = 1, message = "validation.version.positive")
         private long version;
-        @NotBlank(message = "状态变更原因不能为空")
-        @Size(max = 256, message = "状态变更原因不能超过 256 个字符")
+        @NotBlank(message = "validation.statusReason.required")
+        @Size(max = 256, message = "validation.statusReason.size")
         private String reason;
     }
 }

@@ -17,7 +17,7 @@ Account Center 是内部账号中心服务，提供用户管理、应用（子�
 - **运行时**: Java 21 LTS
 - **框架**: Spring Boot 3.5.16 + MyBatis Spring Boot Starter 3.0.5 + Flyway
 - **数据库**: PostgreSQL（主）、MySQL（备选）、H2（测试）
-- **模板**: Thymeleaf（管理后台 UI）
+- **模板**: Thymeleaf（仅保留登录与 SSO 错误页）；管理后台使用独立 Vue 控制台。
 - **端口**: 8088
 - **构建**: `.\mvnw.cmd clean package -DskipTests`
 
@@ -92,9 +92,12 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 ## 数据库与部署
 
 - 数据库迁移使用 Flyway，脚本位于 `account-center-server/src/main/resources/db/migration/`。
+- 方言专用迁移位于 `db/vendor/postgresql` 与 `db/vendor/mysql`，由 `AccountFlywayConfiguration` 保留公共 locations 并追加匹配目录；H2 复用 PostgreSQL 注释语法。不要把整个 db/vendor 加入扫描，以免发现重复版本。
 - 新增表、字段变更只新增对应版本的增量迁移脚本（`V{N}__{description}.sql`）。
 - Flyway 脚本命名格式: `V{版本号}__{描述}.sql`，版本号递增，描述用下划线分隔。
 - 数据库表名统一使用 `account_` 前缀。
+- 新建表及新增/修改字段必须有中文 SQL 说明；脚本写完后执行 `account-database-rules` 的注释检查并记录覆盖与遗漏，缺失不得交付。历史已执行迁移不改写，源码注释不等同于数据库 COMMENT。
+- 新建表及新增/修改字段必须有中文 SQL 说明；脚本写完后执行 `account-database-rules` 的注释检查并记录覆盖与遗漏，缺失不得交付。历史已执行迁移不改写，源码注释不等同于数据库 COMMENT。
 - Mapper XML 位于 `account-center-server/src/main/resources/mapper/`，不要随意迁移目录。
 - 主键策略: 用户表使用 UUID 字符串（`varchar(64)`），应用表使用业务编码 `app_code`。
 - 所有表包含审计字段: `created_by`、`updated_by`、`created_at`、`updated_at`。
@@ -112,6 +115,7 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 - 团队本地以 Windows 为主。命令、脚本和排查步骤优先提供 PowerShell / Windows 可执行方式。
 - 仓库已提供 Maven Wrapper；不要默认存在 GNU 工具链、`bash`、`sed -i`、`awk`、`kubectl`、`docker` 等命令。
 - 中文 Markdown、配置示例、SQL 和 Java 注释保持 UTF-8。
+- 管理 API 用户提示使用 `i18n/api.properties` 与 `api_en.properties` 的成对消息 key，在响应边界通过 `ApiMessages` 按 Accept-Language 翻译；业务 code/字段名不翻译，不返回异常内部细节。
 - 新增团队本地脚本优先提供 `.bat` 或 PowerShell 版本；如果只提供 `.sh`，必须说明运行环境。
 
 ## 构建与验证

@@ -12,17 +12,19 @@
         <result property="targetId" column="target_id"/>
         <result property="detail" column="detail"/>
         <result property="createdAt" column="created_at"/>
+        <result property="traceId" column="trace_id"/>
+        <result property="outcome" column="outcome"/>
     </resultMap>
 
     <!-- 新增审计日志 -->
     <insert id="insert">
-        insert into account_operation_logs (id, operator_id, operation_type, target_type, target_id, detail)
-        values (#{log.id}, #{log.operatorId}, #{log.operationType}, #{log.targetType}, #{log.targetId}, #{log.detail})
+        insert into account_operation_logs (id, operator_id, operation_type, target_type, target_id, detail, trace_id, outcome)
+        values (#{log.id}, #{log.operatorId}, #{log.operationType}, #{log.targetType}, #{log.targetId}, #{log.detail}, #{log.traceId}, #{log.outcome})
     </insert>
 
     <!-- 按条件搜索审计日志，按时间倒序 -->
     <select id="selectByCondition" resultMap="auditLogResultMap">
-        select id, operator_id, operation_type, target_type, target_id, detail, created_at
+        select id, operator_id, operation_type, target_type, target_id, detail, created_at, trace_id, outcome
         from account_operation_logs
         <where>
             <if test="operatorId != null and operatorId != ''">
@@ -41,4 +43,33 @@
         order by created_at desc
     </select>
 
+    <sql id="eventColumns">
+        id, operator_id, operation_type, target_type, target_id, created_at, trace_id, outcome
+    </sql>
+
+    <sql id="eventFilter">
+        <where>
+            <if test="query.operatorId != null">and operator_id = #{query.operatorId}</if>
+            <if test="query.operationType != null">and operation_type = #{query.operationType}</if>
+            <if test="query.targetType != null">and target_type = #{query.targetType}</if>
+            <if test="query.targetId != null">and target_id = #{query.targetId}</if>
+            <if test="query.traceId != null">and trace_id = #{query.traceId}</if>
+        </where>
+    </sql>
+
+    <select id="countEvents" resultType="long">
+        select count(*) from account_operation_logs
+        <include refid="eventFilter"/>
+    </select>
+
+    <select id="selectEvents" resultMap="auditLogResultMap">
+        select <include refid="eventColumns"/> from account_operation_logs
+        <include refid="eventFilter"/>
+        order by created_at desc, id desc
+        limit #{query.size} offset #{query.offset}
+    </select>
+
+    <select id="selectEvent" resultMap="auditLogResultMap">
+        select <include refid="eventColumns"/> from account_operation_logs where id = #{id}
+    </select>
 </mapper>

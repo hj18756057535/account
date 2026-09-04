@@ -14,7 +14,8 @@ description: 在 Account Center 仓库中生成或修改 Java 代码时使用，
 3. 优先复用现有工具类、异常处理和已有的 Store 方法。
 4. 集合输入先批量查库，再用 `Map` / `groupingBy` 组装；看到循环查库要优先改成批量查询。
 5. 新增或修改 Java DTO、Command、值对象和 Spring 组件时使用 Lombok 消除样板代码；只改当前任务触及的类，不为统一风格批量重写历史代码。
-6. 代码改完后执行受影响模块编译或说明无法编译的原因。
+6. 涉及建表、新增/修改字段或迁移时，必须同时使用 `account-database-rules`；交付包含中文表/字段说明的 SQL，并在写完脚本后执行其注释检查，缺失注释不得作为完成交付。不能用 Java 字段注释替代 SQL 注释。
+7. 代码改完后执行受影响模块编译或说明无法编译的原因。
 
 需要更具体规则时：
 
@@ -185,6 +186,7 @@ Request DTO 需要 JavaBean setter 供 Jackson 绑定时，使用 `@Getter` + `@
 - [ ] 普通 URL、OpenAPI 文件名、配置键、Java 包、类和测试名不携带 API 版本号；版本由 Git/制品/发布迭代，确需并行兼容时有明确迁移与退出证据。
 - [ ] `InMemoryAccountStore` 和 `MyBatisAccountStore` 行为一致。
 - [ ] Mapper XML `resultMap` 完整映射所有字段。
+- [ ] 涉及 DDL 时，已按数据库 Skill 核对类型、默认值、空值、主外键/唯一约束及迁移兼容；逐表逐字段注释检查通过并记录命令、检查数量和遗漏项。历史缺失单列记录，不改已执行迁移。
 - [ ] List 返回空集合，无 null。
 - [ ] 模糊查询使用 `concat`，无 `%` 拼接到 Java 代码。
 - [ ] 密钥等敏感信息未暴露在日志或响应中。

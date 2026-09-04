@@ -60,7 +60,7 @@ public class IdempotencyService {
                 return replay(concurrent, requestHash, responseType, true);
             }
             throw new ApiException(HttpStatus.CONFLICT,
-                    "IDEMPOTENCY_IN_PROGRESS", "相同请求正在处理中，请稍后重试");
+                    "IDEMPOTENCY_IN_PROGRESS", "error.idempotencyInProgress");
         }
     }
 
@@ -93,7 +93,7 @@ public class IdempotencyService {
                 return replay(concurrent, requestHash, responseType, false);
             }
             throw new ApiException(HttpStatus.CONFLICT,
-                    "IDEMPOTENCY_IN_PROGRESS", "相同请求正在处理中，请稍后重试");
+                    "IDEMPOTENCY_IN_PROGRESS", "error.idempotencyInProgress");
         }
     }
 
@@ -150,16 +150,16 @@ public class IdempotencyService {
                 existing.getRequestHash().getBytes(StandardCharsets.UTF_8),
                 requestHash.getBytes(StandardCharsets.UTF_8))) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "IDEMPOTENCY_KEY_REUSED", "幂等键已用于不同的请求内容");
+                    "IDEMPOTENCY_KEY_REUSED", "error.idempotencyReused");
         }
         if (!"completed".equals(existing.getStatus()) || existing.getResponseBody() == null) {
             throw new ApiException(HttpStatus.CONFLICT,
-                    "IDEMPOTENCY_IN_PROGRESS", "相同请求正在处理中，请稍后重试");
+                    "IDEMPOTENCY_IN_PROGRESS", "error.idempotencyInProgress");
         }
         if (!replayable) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "IDEMPOTENCY_RESULT_NOT_REPLAYABLE",
-                    "该操作已完成；敏感结果不会再次显示，请刷新资源状态");
+                    "error.sensitiveReplay");
         }
         try {
             return objectMapper.readValue(existing.getResponseBody(), responseType);
@@ -171,8 +171,8 @@ public class IdempotencyService {
     private void validateKey(String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.trim().isEmpty() || idempotencyKey.length() > 128) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "VALIDATION_FAILED", "请求字段校验失败",
-                    java.util.Collections.singletonMap("Idempotency-Key", "幂等键长度必须在 1 到 128 个字符之间"));
+                    "VALIDATION_FAILED", "error.validation",
+                    java.util.Collections.singletonMap("Idempotency-Key", "validation.idempotency"));
         }
     }
 

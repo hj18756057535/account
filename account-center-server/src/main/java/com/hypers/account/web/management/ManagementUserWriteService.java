@@ -66,12 +66,12 @@ public class ManagementUserWriteService {
         if ("disabled".equals(status)) {
             if (userId.equals(operatorId)) {
                 throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "CURRENT_ADMIN_PROTECTED", "不能禁用当前登录的管理员账号");
+                        "CURRENT_ADMIN_PROTECTED", "error.currentAdmin");
             }
             if (authorizationService.isAdmin(userId)
                     && authorizationService.lockAndCountEnabledAdmins() <= 1) {
                 throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "LAST_ADMIN_PROTECTED", "至少需要保留一个已启用的管理员账号");
+                        "LAST_ADMIN_PROTECTED", "error.lastAdmin");
             }
         }
         if (status.equals(current.getStatus()) && expectedVersion == current.getVersion()) {
@@ -91,15 +91,15 @@ public class ManagementUserWriteService {
 
     private ApiException accountConflict() {
         return new ApiException(HttpStatus.CONFLICT,
-                "ACCOUNT_ALREADY_EXISTS", "该登录账号已存在");
+                "ACCOUNT_ALREADY_EXISTS", "error.accountExists");
     }
 
     private ApiException versionConflict() {
         return new ApiException(HttpStatus.CONFLICT,
-                "RESOURCE_VERSION_CONFLICT", "用户已被其他操作更新，请刷新后重试");
+                "RESOURCE_VERSION_CONFLICT", "error.userConflict");
     }
 
     private ApiException notFound() {
-        return new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "未找到指定用户");
+        return new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "error.userNotFound");
     }
 }
