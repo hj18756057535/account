@@ -1,13 +1,16 @@
-param([string[]]$Path)
+param([string[]]$Path, [switch]$RequireDatabaseComments)
 
 # 仅检查 Skill 约定的逐行 CREATE TABLE / ADD COLUMN 源码布局，不执行 SQL。
 function Test-SqlCommentText {
-    param([Parameter(Mandatory)][string]$Sql)
+    param([Parameter(Mandatory)][string]$Sql, [switch]$RequireDatabaseComments)
     $issues = [System.Collections.Generic.List[string]]::new()
     $tables = 0
     $columns = 0
     $inTable = $false
     $previousComment = ''
+    $tableName = ''
+    $tableComments = @{}
+    $columnComments = @{}
     $lineNumber = 0
     foreach ($line in ($Sql -split '\r?\n')) {
         $lineNumber++
@@ -31,17 +34,27 @@ function Test-SqlCommentText {
             if ($inTable) { $issues.Add("${lineNumber}: 前一张表未闭合") }
             $tables++
             $inTable = $true
+            $tableName = [regex]::Match($code, '(?i)^create\s+table\s+(?:if\s+not\s+exists\s+)?(\w+)').Groups[1].Value.ToLowerInvariant()
+            $tableComments[$tableName] = $false
             if ($previousComment -notmatch '[\u3400-\u9fff]') { $issues.Add("${lineNumber}: 缺少紧邻表头的中文表说明") }
-        } elseif ($inTable -and $code -eq ');') {
+        } elseif ($inTable -and ($code -eq ');' -or $code -match "(?i)^\)\s+engine=InnoDB\s+default\s+charset=utf8mb4\s+comment='((?:''|[^'])*)';$")) {
+            if ($code -ne ');') { $tableComments[$tableName] = $Matches[1] -match '[\u3400-\u9fff]' }
             $inTable = $false
         } elseif ($inTable -and $code) {
             if ($code -match '^(constraint|primary\s+key|foreign\s+key|unique|check)\b') {
                 # 约束不计入字段；SQL 语法正确性由数据库定向验证负责。
-            } elseif ($code -match '^\w+\s+(varchar\(\d+\)|char\(\d+\)|bigint|integer|int|smallint|boolean|timestamp|date|text|decimal\(\d+,\s*\d+\))(?:\s|,|$)') {
+            } elseif ($code -match '^\w+\s+(varchar\(\d+\)|char\(\d+\)|bigint|integer|int|smallint|boolean|timestamp|date|text|longtext|decimal\(\d+,\s*\d+\))(?:\s|,|$)') {
                 $columns++
+                $columnName = ($code -split '\s+')[0].ToLowerInvariant()
+                $columnComments["$tableName.$columnName"] = $code -match "(?i)\scomment\s+'(?:''|[^'])*[\u3400-\u9fff](?:''|[^'])*',?$"
                 if (-not $hasChinese) { $issues.Add("${lineNumber}: 字段缺少行末中文说明") }
                 if ($code -match '[;]|,\s*\w+\s+\w+') { $issues.Add("${lineNumber}: 字段定义须独占一行，闭合符另起一行") }
             } else { $issues.Add("${lineNumber}: 未识别的字段/约束布局，请人工核对") }
+        } elseif ($code -match "(?i)^comment\s+on\s+(table|column)\s+(\w+(?:\.\w+)?)\s+is\s+'((?:''|[^'])*)';$") {
+            $targets = if ($Matches[1] -eq 'table') { $tableComments } else { $columnComments }
+            $target = $Matches[2].ToLowerInvariant()
+            if (-not $targets.ContainsKey($target)) { $issues.Add("${lineNumber}: COMMENT 指向未声明对象 $target") }
+            else { $targets[$target] = $Matches[3] -match '[\u3400-\u9fff]' }
         } elseif ($code -match '^alter\s+table\s+\w+\s+add\s+column\s+\w+\s+.+;$') {
             $columns++
             if (-not $hasChinese) { $issues.Add("${lineNumber}: ADD COLUMN 缺少行末中文说明") }
@@ -53,6 +66,14 @@ function Test-SqlCommentText {
     }
     if ($inTable) { $issues.Add('文件结束: 表定义未闭合') }
     if ($columns -eq 0) { $issues.Add('未识别到字段，不能声称字段注释检查通过') }
+    if ($RequireDatabaseComments) {
+        foreach ($target in $tableComments.Keys) {
+            if (-not $tableComments[$target]) { $issues.Add("缺少中文数据库表注释: $target") }
+        }
+        foreach ($target in $columnComments.Keys) {
+            if (-not $columnComments[$target]) { $issues.Add("缺少中文数据库字段注释: $target") }
+        }
+    }
     [pscustomobject]@{ Tables = $tables; Columns = $columns; Issues = @($issues.ToArray()) }
 }
 
@@ -61,7 +82,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     if (-not $Path) { Write-Error '必须通过 -Path 明确指定本次 SQL 文件'; exit 2 }
     $failed = $false
     foreach ($sqlPath in $Path) {
-        $result = Test-SqlCommentText -Sql (Get-Content -LiteralPath $sqlPath -Raw -Encoding UTF8)
+        $result = Test-SqlCommentText -Sql (Get-Content -LiteralPath $sqlPath -Raw -Encoding UTF8) -RequireDatabaseComments:$RequireDatabaseComments
         Write-Output "$sqlPath : tables=$($result.Tables), columns=$($result.Columns), issues=$($result.Issues.Count)"
         foreach ($issue in $result.Issues) { Write-Output $issue }
         if ($result.Issues.Count -gt 0) { $failed = $true }

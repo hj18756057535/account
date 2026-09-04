@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" th:lang="${pageLanguage}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>错误 - Account Center</title>
+    <title th:text="${page.errorTitle}">Account Center</title>
     <style>
         :root{--bg:#f6f8fb;--panel:#fff;--line:#d7dde8;--text:#172033;--muted:#647086;--brand:#1f7a6d;--danger:#c0392b}
         *{box-sizing:border-box}
@@ -16,12 +16,9 @@
 </head>
 <body>
 <div class="error-box">
-    <h1>授权失败</h1>
-    <p id="message"></p>
-    <a href="/">返回首页</a>
+    <h1 th:text="${page.authorizationFailed}"></h1>
+    <p id="message" th:text="${message}"></p>
+    <a href="/" th:text="${page.backHome}"></a>
 </div>
-<script>
-    document.getElementById('message').textContent = new URLSearchParams(window.location.search).get('message') || '未知错误';
-</script>
 </body>
 </html>

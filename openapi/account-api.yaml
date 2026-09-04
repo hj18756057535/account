@@ -7,6 +7,8 @@ info:
     管理端 message/fieldErrors 根据可选 Accept-Language 返回中文或英文；支持 zh/en 地区变体与权重，
     缺失、不支持或非法头回退 zh-CN。响应包含 Content-Language 和 Vary: Accept-Language。
     错误码、字段名、状态值及用户业务数据不随语言变化。
+    服务端旧票据和签名接口的拒绝响应使用本地化 error 字段；框架错误保留 HTTP 状态和必要响应头，
+    不回显异常内部消息。登录与 SSO 页面也按请求语言渲染；语言头不参与签名原文或幂等摘要。
 servers:
   - url: /
 tags:
@@ -17,6 +19,178 @@ tags:
   - name: Integration
   - name: Audit
 paths:
+  /api/user-imports/template:
+    get:
+      tags: [Users]
+      operationId: downloadUserImportTemplate
+      security:
+        - sessionCookie: []
+      summary: 下载用户导入模板
+      description: >-
+        默认启用，仅管理员可用；可设置 account.user-import.enabled=false 关闭。所有响应 no-store。
+        .xlsx 上限 5 MiB、1000 条，四列文本 account/email/name/phone。
+        预览 15 分钟，结果保留 24 小时；重复账号不覆盖，提交全成或全败。
+      responses:
+        '200':
+          description: XLSX 文本列模板
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '410':
+          description: 预览或结果已过期
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '413':
+          description: 文件或解压内容超过限制
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/user-imports/preview:
+    post:
+      tags: [Users]
+      operationId: previewUserImport
+      security:
+        - sessionCookie: []
+      summary: 上传并预览用户导入
+      description: >-
+        默认启用，仅管理员可用；可设置 account.user-import.enabled=false 关闭。所有响应 no-store。
+        .xlsx 上限 5 MiB、1000 条，四列文本 account/email/name/phone。
+        预览 15 分钟，结果保留 24 小时；重复账号不覆盖，提交全成或全败。
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: 校验预览，业务错误通过 valid 和 rows.errors 返回
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserImportPreview' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '410':
+          description: 预览或结果已过期
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '413':
+          description: 文件或解压内容超过限制
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/user-imports/{importId}:
+    get:
+      tags: [Users]
+      operationId: getUserImport
+      security:
+        - sessionCookie: []
+      summary: 读取本人导入预览
+      description: >-
+        默认启用，仅管理员可用；可设置 account.user-import.enabled=false 关闭。所有响应 no-store。
+        .xlsx 上限 5 MiB、1000 条，四列文本 account/email/name/phone。
+        预览 15 分钟，结果保留 24 小时；重复账号不覆盖，提交全成或全败。
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 当前预览；已提交时 rows 为空
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserImportPreview' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '410':
+          description: 预览或结果已过期
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '413':
+          description: 文件或解压内容超过限制
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/user-imports/{importId}/commit:
+    post:
+      tags: [Users]
+      operationId: commitUserImport
+      security:
+        - sessionCookie: []
+      summary: 整批确认导入
+      description: >-
+        默认启用，仅管理员可用；可设置 account.user-import.enabled=false 关闭。所有响应 no-store。
+        .xlsx 上限 5 MiB、1000 条，四列文本 account/email/name/phone。
+        预览 15 分钟，结果保留 24 小时；重复账号不覆盖，提交全成或全败。
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: 导入结果，同批次重复提交不重复创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserImportResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '410':
+          description: 预览或结果已过期
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '413':
+          description: 文件或解压内容超过限制
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /api/session:
     get:
       tags: [Session]
@@ -728,6 +902,50 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    UserImportPreview:
+      type: object
+      required: [importId, expiresAt, rowCount, valid, rows]
+      properties:
+        importId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }
+        rowCount: { type: integer, minimum: 1, maximum: 1000 }
+        valid: { type: boolean }
+        rows:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/UserImportRow' }
+    UserImportRow:
+      type: object
+      required: [rowNumber, account, email, name, phone, errors]
+      properties:
+        rowNumber: { type: integer, minimum: 2, maximum: 1001 }
+        account: { type: string }
+        email: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code, message]
+            properties:
+              field: { type: string }
+              code: { type: string }
+              message: { type: string }
+    UserImportResult:
+      type: object
+      required: [importId, createdCount, items]
+      properties:
+        importId: { type: string, format: uuid }
+        createdCount: { type: integer, minimum: 1, maximum: 1000 }
+        items:
+          type: array
+          items:
+            type: object
+            required: [rowNumber, userId]
+            properties:
+              rowNumber: { type: integer }
+              userId: { type: string }
     AuditEventResponse:
       type: object
       additionalProperties: false
@@ -794,6 +1012,8 @@ components:
             enum:
               - 'users:read'
               - 'users:write'
+              - 'users:import'
+              - 'audit:read'
               - 'applications:read'
               - 'applications:write'
               - 'application-access:read'

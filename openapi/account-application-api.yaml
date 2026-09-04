@@ -5,6 +5,9 @@ info:
   description: >-
     业务系统作为 Provider 暴露给 Account Center 的用户期望状态接口。
     HMAC 签名原文为 method、path、timestamp、nonce、body 按换行连接。
+    可选 Accept-Language 控制 Starter 错误 message 的中英展示，支持 zh/en 地区变体和权重；
+    缺失、不支持或非法头回退 zh-CN，响应含 Content-Language 和 Vary: Accept-Language。
+    code、traceId、状态值与业务数据不翻译，语言头不改变签名或幂等语义；未知错误使用通用本地化提示。
 servers:
   - url: /
 tags:

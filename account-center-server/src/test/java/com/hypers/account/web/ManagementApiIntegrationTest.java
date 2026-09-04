@@ -107,6 +107,7 @@ class ManagementApiIntegrationTest {
                 .andExpect(jsonPath("$.capabilities", containsInAnyOrder(
                         "users:read",
                         "users:write",
+                        "users:import",
                         "applications:read",
                         "applications:write",
                         "application-access:read",

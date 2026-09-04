@@ -4,10 +4,32 @@
 
 ## 当前需求与数据库结构
 
+### Excel 用户导入
+
+默认启用，无需增加启动参数；升级重启后重新登录/刷新会话，管理员用户列表显示“导入用户”。
+可通过 `--account.user-import.enabled=false` 显式关闭。功能仅支持 MyBatis
+数据库 Store；内存演示模式不提供无法原子回滚的导入入口。关闭开关后全部导入端点拒绝，
+普通用户 CRUD 保持不变。不需要配置客户接口或应用白名单。
+
+- 下载 XLSX 模板，按 account/email/name/phone 四列填写文本；手机号保留前导零。
+- 最大 5 MiB、1000 条；仅单工作表，无公式、合并单元格、外部链接、宏或图片/嵌入附件。
+- 上传后预览 15 分钟有效，先修正所有错误再确认；已有账号不覆盖，提交全成或全败。
+- 重试同批次不会重复创建，成功结果保留 24 小时；提交立即清除暂存个人资料，
+  过期记录每分钟最多清理 100 批。暂存 JSON 另限 4 MiB，不保存原始文件。
+- 导入只创建用户档案，不设置密码、管理员角色、应用准入或应用内权限。
+- 导入表已包含在完整 V1 初始化基线中；MySQL 的 JSON 文本列直接使用 LONGTEXT，
+  PostgreSQL/H2 使用 TEXT，所有字段在初始化时即包含数据库注释。
+- 回退先关闭入口并等待在途事务完成，保留新表和已导入用户，不删除业务数据。
+
+客户用户接口本期仅保留适配设计，未实际接入客户环境；Excel 不依赖客户接口。
+
+- 后端中英支持覆盖管理 API、旧票据/签名错误、框架兜底及登录/SSO 模板；Starter 集成错误也支持 Accept-Language。只翻译展示消息，业务编码、数据和签名保持不变；未知内部错误不直接返回给调用方。SSR 页面使用浏览器请求语言，不读取 Vue 的 localStorage。
+
 - 需求正文统一保存在工作区 `requirements/features/ACCOUNT-001/requirement.md`；执行范围以 `.agent-work/ACCOUNT-001/` 中已批准的规格、设计和计划为准。旧后端需求/SSO 计划已移除，保留 [架构说明](docs/architecture.md) 与 [接入指南](docs/integration-guide.md)。
-- [建表参考与字段说明](account-center-server/src/main/resources/db/schema.sql) 为 V1～V5 的合并结构，不作为初始化入口。启动时 Flyway 执行公共迁移，再按数据库类型加载 `db/vendor` 下的 V6，补齐 9 张表、87 个字段的数据库 COMMENT。
-- 已运行项目：保留连接配置，构建并重启后查看 V6 成功日志，再刷新数据库客户端元数据；无需重建表或重新执行 schema.sql。PostgreSQL/H2 使用 COMMENT ON；MySQL 使用 V1～V5 列属性加 COMMENT，并要求 INPLACE/LOCK=NONE。MySQL 如有手工改列或特殊字符集，先核对结构，不直接套用。
-- H2 已验证 V5 升级、原列属性/约束/数据不变及重复启动；PostgreSQL/MySQL 实库尚未验证。失败时保留日志与历史，不盲目 repair、删表或改写旧迁移。回退应用时保留 V6 历史并确认旧制品兼容；更正注释使用新迁移。
+- 数据库现采用完整初始化基线：[PostgreSQL SQL](account-center-server/src/main/resources/db/vendor/postgresql/V1__init_account_center.sql)、[MySQL SQL](account-center-server/src/main/resources/db/vendor/mysql/V1__init_account_center.sql)。每份包含 10 张表、99 个字段、约束、索引及全部数据库注释，不再保留旧 V1～V8 拆分脚本或重复 schema.sql。
+- **仅用于空库**：开发者已确认当前为可重建测试库。先停止旧应用并自行备份/处理数据，提供空数据库或空 schema（旧业务表与旧 flyway_schema_history 均不能残留）；清理旧构建产物后启动，新代码按数据库类型只执行对应 V1，并由 Flyway 自动记录历史。不要同时手工执行 SQL 和应用自动初始化；SQL 文件可直接审阅，默认交给 Flyway 执行。
+- 代码强制关闭自动 baseline、禁止 Flyway clean，不自动清库，不兼容旧迁移历史；发现旧库时停止并检查，不使用 repair 忽略差异。若选择手工执行 SQL，需另行正确建立版本 1 的 Flyway baseline，不要伪造历史记录。临时 sql/init.sql 不作为入口，也不参与构建。
+- PostgreSQL/MySQL 实库仍需开发者验证。新基线无旧数据回填或降级 SQL；恢复旧应用须同时恢复对应的数据库备份与旧迁移历史。后续正式使用后保持迁移不可变，只新增版本。
 
 ## 功能特性
 

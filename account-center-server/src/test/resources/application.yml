@@ -6,7 +6,7 @@ spring:
     password:
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/vendor/postgresql
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml

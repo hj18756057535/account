@@ -4,6 +4,20 @@
 <!-- 用户表 Mapper：提供用户 CRUD、状态管理、关键字搜索 -->
 <mapper namespace="com.hypers.account.mapper.AccountUserMapper">
 
+    <select id="selectExistingAccounts" resultType="string">
+        select account from account_users where account in
+        <foreach collection="accounts" item="account" open="(" separator="," close=")">#{account}</foreach>
+    </select>
+
+    <insert id="insertBatch">
+        insert into account_users (id, account, email, name, phone, status, version, created_by)
+        values
+        <foreach collection="users" item="user" separator=",">
+            (#{user.id}, #{user.account}, #{user.email}, #{user.name}, #{user.phone},
+             #{user.status}, #{user.version}, #{user.createdBy})
+        </foreach>
+    </insert>
+
     <!-- 用户完整字段映射（password 用于登录校验，API 响应中通过 @JsonIgnore 隐藏） -->
     <resultMap id="userResultMap" type="com.hypers.account.app.AccountUser">
         <id property="id" column="id"/>

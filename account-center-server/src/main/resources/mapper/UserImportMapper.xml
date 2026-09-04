@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hypers.account.mapper.UserImportMapper">
+    <resultMap id="batch" type="com.hypers.account.app.UserImportBatch">
+        <id property="id" column="id"/>
+        <result property="fileHash" column="file_hash"/>
+        <result property="rowCount" column="row_count"/>
+        <result property="valid" column="valid"/>
+        <result property="rowsJson" column="rows_json"/>
+        <result property="resultJson" column="result_json"/>
+        <result property="status" column="status"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="updatedBy" column="updated_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <insert id="insert">
+        insert into account_user_imports
+        (id, file_hash, row_count, valid, rows_json, status, expires_at, created_by, created_at)
+        values (#{batch.id}, #{batch.fileHash}, #{batch.rowCount}, #{batch.valid}, #{batch.rowsJson},
+                #{batch.status}, #{batch.expiresAt}, #{batch.createdBy}, #{batch.createdAt})
+    </insert>
+    <select id="find" resultMap="batch">
+        select id, file_hash, row_count, valid, rows_json, result_json, status,
+               expires_at, created_by, updated_by, created_at, updated_at
+        from account_user_imports where id = #{id} and created_by = #{operatorId}
+        <if test="lock">for update</if>
+    </select>
+    <update id="complete">
+        update account_user_imports set status = 'committed', rows_json = null,
+        result_json = #{batch.resultJson}, expires_at = #{batch.expiresAt},
+        updated_by = #{batch.updatedBy}, updated_at = #{batch.updatedAt}
+        where id = #{batch.id} and created_by = #{batch.createdBy} and status = 'preview'
+    </update>
+    <select id="expiredIds" resultType="string">
+        select id from account_user_imports where expires_at &lt;= #{now}
+        order by expires_at, id limit 100
+    </select>
+    <delete id="deleteExpired">
+        delete from account_user_imports where expires_at &lt;= #{now} and id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+</mapper>

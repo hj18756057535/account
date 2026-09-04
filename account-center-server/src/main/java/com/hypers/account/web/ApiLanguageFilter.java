@@ -20,7 +20,9 @@ public class ApiLanguageFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().substring(request.getContextPath().length()).startsWith("/api/");
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return !(path.startsWith("/api/") || path.startsWith("/openapi/") || path.startsWith("/sso/")
+                || path.equals("/login") || path.equals("/logout") || path.equals("/error"));
     }
 
     @Override

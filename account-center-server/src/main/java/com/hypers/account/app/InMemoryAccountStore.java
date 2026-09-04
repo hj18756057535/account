@@ -13,6 +13,22 @@ import java.util.stream.Collectors;
 
 public class InMemoryAccountStore implements AccountStore {
 
+    @Override
+    public synchronized List<String> findExistingAccounts(List<String> accounts) {
+        var requested = new HashSet<>(accounts);
+        return usersById.values().stream().map(AccountUser::getAccount).filter(requested::contains).toList();
+    }
+
+    @Override
+    public synchronized List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId) {
+        var seen = new HashSet<String>();
+        for (var command : commands) {
+            if (!seen.add(command.getAccount())) throw new AccountAlreadyExistsException();
+            ensureAccountAvailable(command.getAccount(), null);
+        }
+        return commands.stream().map(command -> saveNewUser(command, operatorId)).toList();
+    }
+
     private final Map<String, AccountUser> usersById = new HashMap<>();
     private final Map<String, AccountApplication> applicationsByCode = new HashMap<>();
     private final Map<String, Set<String>> authorizedAppsByUserId = new HashMap<>();

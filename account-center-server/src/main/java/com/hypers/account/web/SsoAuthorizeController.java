@@ -10,6 +10,9 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.ui.Model;
+import lombok.RequiredArgsConstructor;
 
 /**
  * SSO 授权端点控制器。
@@ -23,15 +26,13 @@ import org.springframework.web.bind.annotation.RequestParam;
  * 5. 未授权则显示无权限页面
  */
 @Controller
+@RequiredArgsConstructor
 public class SsoAuthorizeController {
 
     private final AccountDirectoryService directoryService;
     private final SsoTicketService ticketService;
 
-    public SsoAuthorizeController(AccountDirectoryService directoryService, SsoTicketService ticketService) {
-        this.directoryService = directoryService;
-        this.ticketService = ticketService;
-    }
+    private final ApiMessages messages;
 
     @GetMapping("/sso/authorize")
     public String authorize(@RequestParam String appCode,
@@ -52,15 +53,15 @@ public class SsoAuthorizeController {
         try {
             application = directoryService.getApplication(appCode);
         } catch (IllegalArgumentException e) {
-            return "redirect:/sso/error?message=" + encode("应用不存在");
+            return "redirect:/sso/error?code=applicationNotFound";
         }
         if ("disabled".equals(application.getStatus())) {
-            return "redirect:/sso/error?message=" + encode("应用已禁用");
+            return "redirect:/sso/error?code=applicationDisabled";
         }
 
         // 检查用户是否授权该应用
         if (!directoryService.isAuthorized(sessionUser.getUserId(), appCode)) {
-            return "redirect:/sso/error?message=" + encode("您没有该应用的访问权限");
+            return "redirect:/sso/error?code=accessDenied";
         }
 
         // 生成一次性 SSO code
@@ -84,7 +85,18 @@ public class SsoAuthorizeController {
     }
 
     @GetMapping("/sso/error")
-    public String errorPage() {
+    public String errorPage(@RequestParam(required = false) String code,
+                            @RequestParam(required = false) String message,
+                            HttpServletRequest request, Model model) {
+        // Only known reasons are rendered; legacy message links remain readable without reflecting arbitrary text.
+        String key = switch (code != null ? code : String.valueOf(message)) {
+            case "applicationNotFound", "应用不存在" -> "sso.applicationNotFound";
+            case "applicationDisabled", "应用已禁用" -> "sso.applicationDisabled";
+            case "accessDenied", "您没有该应用的访问权限" -> "sso.accessDenied";
+            case "callbackMismatch", "回调地址不匹配" -> "sso.callbackMismatch";
+            default -> "sso.unknown";
+        };
+        model.addAttribute("message", messages.text(request, key));
         return "sso-error";
     }
 

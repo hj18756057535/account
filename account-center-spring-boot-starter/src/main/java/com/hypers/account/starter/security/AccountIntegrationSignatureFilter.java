@@ -5,6 +5,7 @@ import com.hypers.account.contract.AccountIntegrationHeaders;
 import com.hypers.account.starter.properties.AccountIntegrationProperties;
 import com.hypers.account.starter.sign.AccountHmacSigner;
 import com.hypers.account.starter.web.AccountIntegrationErrorResponse;
+import com.hypers.account.starter.web.AccountIntegrationMessages;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,12 +33,14 @@ public class AccountIntegrationSignatureFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        response.setHeader("Content-Language", AccountIntegrationMessages.locale(request).toLanguageTag());
+        response.addHeader("Vary", "Accept-Language");
         byte[] body = request.getInputStream().readAllBytes();
         CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(request, body);
         try {
             verifyRequest(request, new String(body, StandardCharsets.UTF_8));
         } catch (IllegalArgumentException exception) {
-            writeUnauthorized(response);
+            writeUnauthorized(request, response);
             return;
         }
         filterChain.doFilter(wrappedRequest, response);
@@ -83,13 +86,13 @@ public class AccountIntegrationSignatureFilter extends OncePerRequestFilter {
         return value;
     }
 
-    private void writeUnauthorized(HttpServletResponse response) throws IOException {
+    private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getOutputStream(), AccountIntegrationErrorResponse.builder()
                 .code("AUTHENTICATION_REQUIRED")
-                .message("集成请求认证失败")
+                .message(AccountIntegrationMessages.text(request, "AUTHENTICATION_REQUIRED"))
                 .traceId(UUID.randomUUID().toString())
                 .build());
     }

@@ -16,10 +16,11 @@ public class WebMvcSecurityConfiguration implements WebMvcConfigurer {
     private final AdminAuthorizationService authorizationService;
     private final CsrfTokenManager csrfTokenManager;
     private final ApiErrorWriter apiErrorWriter;
+    private final LegacyApiErrorWriter legacyErrors;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new AdminSessionInterceptor(authorizationService, apiErrorWriter))
+        registry.addInterceptor(new AdminSessionInterceptor(authorizationService, apiErrorWriter, legacyErrors))
                 .addPathPatterns(
                         "/api/**",
                         "/users",
@@ -29,6 +30,7 @@ public class WebMvcSecurityConfiguration implements WebMvcConfigurer {
         registry.addInterceptor(new CsrfInterceptor(csrfTokenManager, apiErrorWriter))
                 .addPathPatterns(
                         "/api/session",
+                        "/api/user-imports/**",
                         "/api/users",
                         "/api/users/**",
                         "/api/applications",

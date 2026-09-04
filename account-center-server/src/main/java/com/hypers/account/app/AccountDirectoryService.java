@@ -16,6 +16,14 @@ import lombok.RequiredArgsConstructor;
 public class AccountDirectoryService {
 
     private final AccountStore store;
+
+    public List<String> findExistingAccounts(List<String> accounts) {
+        return store.findExistingAccounts(accounts);
+    }
+
+    public List<AccountUser> createManagedUsers(List<SaveUserCommand> commands, String operatorId) {
+        return store.saveNewUsers(commands, operatorId);
+    }
     private final ApplicationUserSyncClient syncClient;
     private final ApplicationUrlValidator urlValidator = new ApplicationUrlValidator();
 

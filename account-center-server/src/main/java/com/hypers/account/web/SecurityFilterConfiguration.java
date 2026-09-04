@@ -13,9 +13,9 @@ public class SecurityFilterConfiguration {
     @Bean
     public FilterRegistrationBean<OpenApiSignatureFilter> openApiSignatureFilter(
             OpenApiSignatureVerifier signatureVerifier,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, LegacyApiErrorWriter errors) {
         FilterRegistrationBean<OpenApiSignatureFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new OpenApiSignatureFilter(signatureVerifier, objectMapper));
+        registration.setFilter(new OpenApiSignatureFilter(signatureVerifier, objectMapper, errors));
         registration.addUrlPatterns("/openapi/*");
         registration.setOrder(1);
         return registration;
@@ -24,9 +24,9 @@ public class SecurityFilterConfiguration {
     @Bean
     public FilterRegistrationBean<AdminTicketIssueValidationFilter> adminTicketIssueValidationFilter(
             AccountDirectoryService directoryService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, LegacyApiErrorWriter errors) {
         FilterRegistrationBean<AdminTicketIssueValidationFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new AdminTicketIssueValidationFilter(directoryService, objectMapper));
+        registration.setFilter(new AdminTicketIssueValidationFilter(directoryService, objectMapper, errors));
         registration.addUrlPatterns("/api/admin-tickets");
         registration.setOrder(2);
         return registration;

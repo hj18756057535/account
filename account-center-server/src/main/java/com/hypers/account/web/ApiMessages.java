@@ -50,4 +50,16 @@ public class ApiMessages {
         keys.forEach((field, key) -> translated.put(field, text(request, key)));
         return translated;
     }
+
+    public String httpErrorKey(int status) {
+        return switch (status) {
+            case 401 -> "error.authentication";
+            case 403 -> "error.accessDenied";
+            case 404 -> "error.notFound";
+            case 405 -> "error.method";
+            case 406 -> "error.notAcceptable";
+            case 415 -> "error.mediaType";
+            default -> status >= 500 ? "error.internal" : "error.invalidRequest";
+        };
+    }
 }

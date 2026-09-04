@@ -91,8 +91,9 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 ## 数据库与部署
 
-- 数据库迁移使用 Flyway，脚本位于 `account-center-server/src/main/resources/db/migration/`。
-- 方言专用迁移位于 `db/vendor/postgresql` 与 `db/vendor/mysql`，由 `AccountFlywayConfiguration` 保留公共 locations 并追加匹配目录；H2 复用 PostgreSQL 注释语法。不要把整个 db/vendor 加入扫描，以免发现重复版本。
+- 数据库迁移使用 Flyway，每个方言的完整脚本分别位于 `account-center-server/src/main/resources/db/vendor/postgresql` 与 `db/vendor/mysql`；`AccountFlywayConfiguration` 只加载匹配目录，H2 使用 PostgreSQL 方言。不要扫描父目录或继续加载旧公共迁移目录。
+- 新表必须在同一迁移交付完整字段类型和数据库注释：MySQL 直接在 CREATE TABLE 写 COMMENT，PostgreSQL 在同一文件紧跟 COMMENT ON；不拆成下一版本补注释，不维护重复 schema.sql 副本。
+- 2026-09-04 开发者明确授权重建未发布测试库，本次用完整 V1 替换旧 V1～V8；旧库不兼容，数据和历史由开发者处理。此例外不适用于以后已发布迁移。自动 baseline 和 clean 均禁止，初始化默认由应用对空库执行。
 - 新增表、字段变更只新增对应版本的增量迁移脚本（`V{N}__{description}.sql`）。
 - Flyway 脚本命名格式: `V{版本号}__{描述}.sql`，版本号递增，描述用下划线分隔。
 - 数据库表名统一使用 `account_` 前缀。

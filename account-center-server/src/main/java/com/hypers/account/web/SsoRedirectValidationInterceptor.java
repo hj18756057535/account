@@ -2,8 +2,6 @@ package com.hypers.account.web;
 
 import com.hypers.account.app.AccountApplication;
 import com.hypers.account.app.AccountDirectoryService;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -26,7 +24,7 @@ public class SsoRedirectValidationInterceptor implements HandlerInterceptor {
         try {
             AccountApplication application = directoryService.getApplication(appCode);
             if (!redirectUri.equals(application.getSsoCallbackUrl())) {
-                response.sendRedirect("/sso/error?message=" + URLEncoder.encode("回调地址不匹配", StandardCharsets.UTF_8.name()));
+                response.sendRedirect("/sso/error?code=callbackMismatch");
                 return false;
             }
         } catch (IllegalArgumentException ignored) {

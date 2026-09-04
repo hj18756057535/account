@@ -8,6 +8,15 @@ import lombok.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 全局异常处理。
@@ -18,6 +27,18 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class AccountExceptionHandler {
 
     private final ApiMessages messages;
+
+    @ExceptionHandler({ServletRequestBindingException.class, HttpRequestMethodNotSupportedException.class,
+            HttpMediaTypeNotSupportedException.class, HttpMediaTypeNotAcceptableException.class,
+            NoResourceFoundException.class, MethodArgumentTypeMismatchException.class,
+            HttpMessageNotReadableException.class, MethodArgumentNotValidException.class, ResponseStatusException.class})
+    public ResponseEntity<AccountExceptionHandler.ErrorResponse> handleHttpFailure(Exception exception,
+                                                                                 HttpServletRequest request) {
+        int status = exception instanceof org.springframework.web.ErrorResponse error ? error.getStatusCode().value() : 400;
+        var response = ResponseEntity.status(status);
+        if (exception instanceof org.springframework.web.ErrorResponse error) response.headers(error.getHeaders());
+        return response.body(new AccountExceptionHandler.ErrorResponse(messages.text(request, messages.httpErrorKey(status))));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex,

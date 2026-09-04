@@ -34,6 +34,7 @@ public class ManagementSessionController {
     private final AccountLoginService loginService;
     private final AdminAuthorizationService authorizationService;
     private final CsrfTokenManager csrfTokenManager;
+    private final UserImportFeature userImportFeature;
 
     @GetMapping
     public SessionResponse currentSession(HttpServletRequest request) {
@@ -79,11 +80,15 @@ public class ManagementSessionController {
             return new SessionResponse(false, null, Collections.emptyList(), Collections.emptyList(), csrfToken);
         }
         List<String> roles = authorizationService.findRoles(sessionUser.getUserId());
+        List<String> capabilities = new java.util.ArrayList<>(authorizationService.findCapabilities(roles));
+        if (userImportFeature.enabled() && capabilities.contains(AdminAuthorizationService.USERS_WRITE)) {
+            capabilities.add("users:import");
+        }
         return new SessionResponse(
                 true,
                 new SessionUser(sessionUser.getUserId(), sessionUser.getAccount(), sessionUser.getName()),
                 roles,
-                authorizationService.findCapabilities(roles),
+                capabilities,
                 csrfToken);
     }
 

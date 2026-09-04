@@ -1,6 +1,7 @@
 package com.hypers.account.web;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.app.AccountApplication;
 import com.hypers.account.app.AccountDirectoryService;
@@ -12,16 +13,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.filter.OncePerRequestFilter;
+import lombok.RequiredArgsConstructor;
 
+@RequiredArgsConstructor
 public class AdminTicketIssueValidationFilter extends OncePerRequestFilter {
 
     private final AccountDirectoryService directoryService;
     private final ObjectMapper objectMapper;
 
-    public AdminTicketIssueValidationFilter(AccountDirectoryService directoryService, ObjectMapper objectMapper) {
-        this.directoryService = directoryService;
-        this.objectMapper = objectMapper;
-    }
+    private final LegacyApiErrorWriter errors;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -43,18 +43,18 @@ public class AdminTicketIssueValidationFilter extends OncePerRequestFilter {
             if ("disabled".equals(application.getStatus())
                     || "disabled".equals(user.getStatus())
                     || !directoryService.isAuthorized(userId, appCode)) {
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+                errors.write(request, response, HttpServletResponse.SC_BAD_REQUEST, "error.ticketRequest");
                 return;
             }
-        } catch (IllegalArgumentException e) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST);
+        } catch (IllegalArgumentException | JsonProcessingException e) {
+            errors.write(request, response, HttpServletResponse.SC_BAD_REQUEST, "error.ticketRequest");
             return;
         }
         filterChain.doFilter(wrapped, response);
     }
 
     private String required(JsonNode json, String field) {
-        JsonNode value = json.get(field);
+        JsonNode value = json == null ? null : json.get(field);
         if (value == null || value.asText().trim().isEmpty()) {
             throw new IllegalArgumentException(field + " is required");
         }

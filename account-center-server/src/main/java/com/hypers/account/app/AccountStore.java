@@ -9,6 +9,10 @@ import java.util.List;
  */
 public interface AccountStore {
 
+    List<String> findExistingAccounts(List<String> accounts);
+
+    List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId);
+
     AccountUser saveNewUser(SaveUserCommand command);
 
     AccountUser saveNewUser(SaveUserCommand command, String operatorId);

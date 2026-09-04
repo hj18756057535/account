@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" th:lang="${pageLanguage}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>登录 - Account Center</title>
+    <title th:text="${page.loginTitle}">Account Center</title>
     <style>
         :root{--bg:#f6f8fb;--panel:#fff;--line:#d7dde8;--text:#172033;--muted:#647086;--brand:#1f7a6d;--brand-dark:#155f55;--danger:#c0392b}
         *{box-sizing:border-box}
@@ -22,11 +22,11 @@
 <div class="login-box">
     <h1>Account Center</h1>
     <form method="post" action="/login">
-        <label for="account">账号</label>
+        <label for="account" th:text="${page.account}"></label>
         <input id="account" name="account" type="text" required autofocus>
-        <label for="password">密码</label>
+        <label for="password" th:text="${page.password}"></label>
         <input id="password" name="password" type="password" required>
-        <button type="submit">登录</button>
+        <button type="submit" th:text="${page.signIn}"></button>
     </form>
     <div class="error" id="errorMsg" th:text="${error}"></div>
 </div>

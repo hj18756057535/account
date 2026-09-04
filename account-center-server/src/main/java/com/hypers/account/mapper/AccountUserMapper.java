@@ -10,6 +10,10 @@ import java.util.List;
 @Mapper
 public interface AccountUserMapper {
 
+    List<String> selectExistingAccounts(@Param("accounts") List<String> accounts);
+
+    void insertBatch(@Param("users") List<AccountUser> users);
+
     void insert(@Param("user") AccountUser user);
 
     int update(@Param("user") AccountUser user);

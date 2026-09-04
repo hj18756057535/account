@@ -13,6 +13,28 @@ import org.springframework.dao.DataIntegrityViolationException;
 @RequiredArgsConstructor
 public class MyBatisAccountStore implements AccountStore {
 
+    @Override
+    public List<String> findExistingAccounts(List<String> accounts) {
+        return accounts.isEmpty() ? java.util.Collections.emptyList() : userMapper.selectExistingAccounts(accounts);
+    }
+
+    @Override
+    public List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId) {
+        if (commands.isEmpty()) return java.util.Collections.emptyList();
+        List<AccountUser> users = commands.stream().map(command -> {
+            AccountUser user = new AccountUser(UUID.randomUUID().toString().replace("-", ""),
+                    command.getAccount(), command.getEmail(), command.getName(), command.getPhone());
+            user.setCreatedBy(operatorId);
+            return user;
+        }).toList();
+        try {
+            userMapper.insertBatch(users);
+        } catch (DataIntegrityViolationException exception) {
+            throw new AccountAlreadyExistsException();
+        }
+        return users;
+    }
+
     private final AccountUserMapper userMapper;
     private final AccountApplicationMapper applicationMapper;
     private final AccountUserApplicationMapper userApplicationMapper;

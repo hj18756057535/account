@@ -47,21 +47,21 @@ description: 在 Account Center 仓库中新增或修改表、字段、索引、
 - **状态字段**: 使用 `varchar(32)`，值为 `enabled` / `disabled`，默认 `enabled`。
 - **时间字段**: 使用 `timestamp` 类型，`created_at` 默认 `current_timestamp`。
 - **精度数值**: 使用 `DECIMAL(p,s)` / `BigDecimal`。
-- **文本**: 大段文本使用 `text` 类型。
+- **文本**: 根据实际容量和数据库方言一次确定类型；PostgreSQL 使用 `text`，MySQL 超过 TEXT 容量时直接使用 `longtext`，不先建小类型再补 ALTER。
 - **表/字段注释**: 新表和每个新增/修改字段必须有中文业务说明；必要时说明枚举编码、单位、默认值、空值、关联和敏感数据约束。不能只写表级说明、Java 注解，或以“简单字段”为由省略。
 
 ## SQL 写完后的注释检查（必做）
 
-- 本项目新 DDL 使用可核查布局：CREATE TABLE 表头独占一行，紧前一行写中文表说明；每个字段定义独占一行，末尾写 `-- 中文说明`；闭合 `);` 独占一行。ADD COLUMN 每个字段一条语句，末尾同样写说明。
+- 本项目新 DDL 使用可核查布局：CREATE TABLE 表头独占一行，紧前一行写中文表说明；每个字段定义独占一行，末尾写 `-- 中文说明`。PostgreSQL 闭合 `);` 独占一行，随后在同一迁移文件写表/字段 COMMENT ON；MySQL 字段定义直接包含 COMMENT，闭合行使用 `) engine=InnoDB default charset=utf8mb4 comment='中文表说明';`。新表不得先建表再另发版本补注释。ADD COLUMN 每个字段一条语句，末尾同样写说明。
 - 在 Account 仓库根执行下列命令；将 `-Path` 换成本次实际编写的 SQL 路径，可传路径数组。脚本只读，不连接数据库，不格式化或改写文件。
 
 ```powershell
-pwsh -NoProfile -File .agents/skills/account-database-rules/scripts/Test-SqlComments.ps1 -Path account-center-server/src/main/resources/db/schema.sql
+pwsh -NoProfile -File .agents/skills/account-database-rules/scripts/Test-SqlComments.ps1 -Path account-center-server/src/main/resources/db/vendor/postgresql/V1__init_account_center.sql -RequireDatabaseComments
 ```
 
 - 自动检查覆盖上述 CREATE TABLE / ADD COLUMN 源码注释，输出表数、字段数及缺失行，非零退出码必须处理；未知布局/未识别字段不能算通过。MODIFY/ALTER COLUMN、方言特有语法需逐字段人工核对并记录覆盖，不把本脚本称为通用 SQL 解析器。
 - 修改检查器后运行 `pwsh -NoProfile -File .agents/skills/account-database-rules/scripts/Test-SqlComments.Tests.ps1`，验证缺失注释、字符串伪注释、未知布局与正常字段的正反例。
-- 自动检查只证明有中文源码说明；还要人工核对说明与字段实际语义一致。SQL `--` 与数据库 COMMENT 是不同交付：需要数据库工具显示说明时，按目标方言另交付并验证元数据，不能拿源码注释替代。
+- 初始化脚本分别检查两个方言。`-RequireDatabaseComments` 额外核对每个 CREATE TABLE 声明的表/字段是否有中文数据库 COMMENT，并拒绝 COMMENT 指向未声明对象；此检查只支持上述受控布局，不是通用 SQL 解析器。实际元数据、语义、类型及约束仍需数据库定向验证；H2 兼容模式不等同于 PostgreSQL/MySQL 实库验证。
 - 核对主键、外键、唯一约束、索引、类型/长度、默认值与空值，并同步当前建表参考；PostgreSQL/MySQL/H2 兼容性按实际变更验证。MySQL 为加 COMMENT 而 MODIFY COLUMN 时完整保留列属性；PostgreSQL 的 COMMENT ON 不直接混入 MySQL 共用脚本。
 - 不为消除检查失败修改已执行 Flyway 历史文件。历史缺失单列为债务，补到当前参考或获准的新迁移；本次新脚本有遗漏必须修复。只涉及索引/数据的脚本记录“无新增字段”并人工核对范围，不虚报字段检查通过。
 
@@ -78,9 +78,9 @@ V3__create_audit_index.sql      -- 新增索引示例
 规则：
 - 版本号 `N` 递增，不可重复。
 - 描述用下划线分隔，简洁说明变更内容。
-- 只写增量变更（`ALTER TABLE`、`CREATE INDEX` 等），不修改已执行的历史脚本。
-- 脚本位于 `account-center-server/src/main/resources/db/migration/`。
-- Flyway 配置: `spring.flyway.enabled=true`、`locations=classpath:db/migration`、`baseline-on-migrate=true`。
+- 初始 V1 必须一次包含当前全部结构、约束、索引及表/字段注释，不保留重复的 schema.sql 参考副本。后续变更才新增递增版本；禁止自动改写已执行历史。仅当开发者明确确认未发布测试库可重建并授权重置基线时例外；由开发者处理数据及历史表，不运行自动清库。
+- 脚本分别位于 `account-center-server/src/main/resources/db/vendor/postgresql/` 和 `db/vendor/mysql/`，保持同版本的等价业务结构；不要再使用公共建表 + 独立版本补注释模式。
+- `AccountFlywayConfiguration` 按数据库类型只选择一个目录；H2 测试使用 PostgreSQL 方言。强制 `baselineOnMigrate(false)` 和 `cleanDisabled(true)`，拒绝静默接管旧库或清库。默认由应用在空库执行 V1 并记录历史，不手工导入后再期待 Flyway 自动识别。
 
 示例：
 

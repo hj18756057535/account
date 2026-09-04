@@ -14,6 +14,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
 
     private final AdminAuthorizationService authorizationService;
     private final ApiErrorWriter apiErrorWriter;
+    private final LegacyApiErrorWriter legacyErrors;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -28,7 +29,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
                 return false;
             }
             if (request.getRequestURI().startsWith("/api/")) {
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                legacyErrors.write(request, response, HttpServletResponse.SC_UNAUTHORIZED, "error.authentication");
             } else {
                 response.sendRedirect("/login");
             }
@@ -42,7 +43,11 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
                     "ACCESS_DENIED", "error.accessDenied");
             return false;
         }
-        response.sendError(HttpServletResponse.SC_FORBIDDEN);
+        if (request.getRequestURI().startsWith("/api/")) {
+            legacyErrors.write(request, response, HttpServletResponse.SC_FORBIDDEN, "error.accessDenied");
+        } else {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+        }
         return false;
     }
 
@@ -60,6 +65,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
 
     private boolean isConsoleApiRequest(String requestUri) {
         return "/api/session".equals(requestUri)
+                || requestUri.startsWith("/api/user-imports/")
                 || "/api/users".equals(requestUri)
                 || requestUri.startsWith("/api/users/")
                 || "/api/applications".equals(requestUri)
