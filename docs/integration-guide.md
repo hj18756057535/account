@@ -2,6 +2,8 @@
 
 > 当前事实源：`openapi/account-api.yaml` 与 `openapi/account-application-api.yaml`。下方“历史草案”仅保留设计追溯，不得用于新接入。
 
+> T-008 托管准入同步的启用、持久化幂等、回执与升级要求见 [应用准入托管同步](application-synchronization.md)。旧客户端调用成功与 Starter 内存 Guard 均不等于可靠确认。
+
 ## 当前三模块接入方式
 
 业务应用只引入 Spring Boot Starter；Contract 会作为传递依赖进入应用。Account Server 不依赖 Starter。

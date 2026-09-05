@@ -14,6 +14,27 @@ import org.junit.jupiter.api.Test;
 class AccountUserSyncControllerTest {
 
     @Test
+    void forwardsIdempotencyKeyToDurableHandlerEntryPoint() {
+        AccountUserSyncHandler handler = new AccountUserSyncHandler() {
+            @Override
+            public AccountUserSyncResult apply(AccountUserDesiredState state) {
+                throw new AssertionError("Legacy entry point must not be selected");
+            }
+
+            @Override
+            public AccountUserSyncResult apply(String key, AccountUserDesiredState state) {
+                assertThat(key).isEqualTo("durable-command-1");
+                return AccountUserSyncResult.builder().appCode(state.getAppCode()).globalUserId(state.getGlobalUserId())
+                        .localUserId("local-durable-1").appliedStatus(state.getDesiredStatus())
+                        .appliedVersion(state.getSyncVersion()).resultCode("APPLIED").build();
+            }
+        };
+        var controller = new AccountUserSyncController(properties(), handler, new AccountUserSyncGuard());
+        assertThat(controller.apply("user-1", "durable-command-1", desiredState(1, "enabled")).getLocalUserId())
+                .isEqualTo("local-durable-1");
+    }
+
+    @Test
     void reusesIdempotentResultAndRejectsStaleVersion() {
         AtomicInteger calls = new AtomicInteger();
         AccountUserSyncHandler handler = desiredState -> {

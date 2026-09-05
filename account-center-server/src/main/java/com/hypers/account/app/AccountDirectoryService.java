@@ -65,7 +65,7 @@ public class AccountDirectoryService {
     public AccountUser updateUser(String userId, SaveUserCommand command) {
         AccountUser user = store.updateUser(userId, command);
         for (AccountApplication application : store.findAuthorizedApplications(userId)) {
-            syncClient.upsert(application, user);
+            if (!application.isManagedSync()) syncClient.upsert(application, user);
         }
         return user;
     }
@@ -73,6 +73,7 @@ public class AccountDirectoryService {
     public void authorize(String userId, String appCode) {
         AccountUser user = store.requireUser(userId);
         AccountApplication application = store.requireApplication(appCode);
+        if (application.isManagedSync()) throw new IllegalArgumentException("managed application requires versioned access API");
         if ("disabled".equals(application.getStatus())) {
             throw new IllegalArgumentException("application is disabled");
         }
@@ -83,6 +84,7 @@ public class AccountDirectoryService {
     public void deauthorize(String userId, String appCode) {
         AccountUser user = store.requireUser(userId);
         AccountApplication application = store.requireApplication(appCode);
+        if (application.isManagedSync()) throw new IllegalArgumentException("managed application requires versioned access API");
         store.deauthorize(userId, appCode);
         syncClient.disable(application, user);
     }

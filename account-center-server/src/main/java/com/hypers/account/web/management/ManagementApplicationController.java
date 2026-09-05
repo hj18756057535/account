@@ -51,6 +51,7 @@ public class ManagementApplicationController {
     private final AccountDirectoryService directoryService;
     private final ManagementApplicationWriteService writeService;
     private final IdempotencyService idempotencyService;
+    private final com.hypers.account.app.ApplicationSynchronizationService synchronizationService;
 
     @GetMapping("/api/applications")
     public List<ApplicationResponse> listApplications(
@@ -184,6 +185,7 @@ public class ManagementApplicationController {
                 .collect(Collectors.toMap(AccountApplication::getAppCode, Function.identity()));
         try {
             return directoryService.getUserApplicationAccess(userId).stream()
+                    .peek(access -> synchronizationService.decorate(access, applications.get(access.getAppCode())))
                     .map(access -> ApplicationAccessResponse.from(access, applications.get(access.getAppCode())))
                     .collect(Collectors.toList());
         } catch (IllegalArgumentException exception) {
@@ -217,7 +219,7 @@ public class ManagementApplicationController {
                                 request.getStatus(),
                                 request.getVersion(),
                                 RequestTraceFilter.traceId(servletRequest),
-                                operatorId),
+                                operatorId, request.isConfirmPermissionReuse()),
                         directoryService.getApplication(appCode)));
         return ResponseEntity.accepted().body(response);
     }
@@ -225,6 +227,35 @@ public class ManagementApplicationController {
     private String operatorId(HttpSession session) {
         AccountSessionUser user = (AccountSessionUser) session.getAttribute(AuthController.SESSION_USER_KEY);
         return user.getUserId();
+    }
+
+    @PostMapping("/api/users/{userId}/applications/{appCode}/synchronizations")
+    public ResponseEntity<ApplicationAccessResponse> retrySynchronization(
+            @PathVariable String userId, @PathVariable String appCode,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody RetrySynchronizationRequest request, HttpSession session) {
+        validateUserId(userId);
+        validateAppCode(appCode);
+        String operator = operatorId(session);
+        if (!"enabled".equals(directoryService.getUser(operator).getStatus()))
+            throw new ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "error.accessDenied");
+        var response = idempotencyService.execute(operator, "POST",
+                "/api/users/" + userId + "/applications/" + appCode + "/synchronizations",
+                idempotencyKey, request, 202, ApplicationAccessResponse.class, () -> {
+                    synchronizationService.retry(userId, appCode, request.getExpectedVersion(), operator);
+                    return listApplicationAccess(userId).stream().filter(row -> appCode.equals(row.getAppCode()))
+                            .findFirst().orElseThrow();
+                });
+        return ResponseEntity.accepted().body(response);
+    }
+
+    @Getter
+    @Setter
+    public static class RetrySynchronizationRequest {
+        @NotNull(message = "validation.version.required")
+        @Min(value = 1, message = "validation.version.positive")
+        @jakarta.validation.constraints.Max(9007199254740991L)
+        private Long expectedVersion;
     }
 
     private void validateAppCode(String appCode) {
@@ -344,6 +375,7 @@ public class ManagementApplicationController {
         @NotNull(message = "validation.version.required")
         @Min(value = 0, message = "validation.version.nonnegative")
         private Long version;
+        private boolean confirmPermissionReuse;
         @NotBlank(message = "validation.reason.required")
         @Size(max = 256, message = "validation.reason.size")
         private String reason;
@@ -434,7 +466,13 @@ public class ManagementApplicationController {
                     application == null ? access.getAppCode() : application.getName(),
                     application == null ? "disabled" : application.getStatus(),
                     access.getDesiredStatus(), access.getVersion(), access.getIntegrationStatus(),
-                    access.getSyncCommandId(), access.getUpdatedAt());
+                    access.getSyncCommandId(), access.getUpdatedAt(), access.getAppliedStatus(), access.getAppliedVersion(),
+                    access.getLastSyncedAt(), access.getLastErrorCode(), access.isRetryable());
         }
+        String appliedStatus;
+        Long appliedVersion;
+        Instant lastSyncedAt;
+        String lastErrorCode;
+        boolean retryable;
     }
 }

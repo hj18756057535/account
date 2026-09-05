@@ -49,7 +49,13 @@ public class SsoTicketController {
 
     @PostMapping("/openapi/sso/tickets/exchange")
     public SsoUserPayload exchange(@Valid @RequestBody ExchangeTicketRequest request) {
-        return ticketService.exchange(request.getAppCode(), request.getCode());
+        SsoUserPayload payload = ticketService.exchange(request.getAppCode(), request.getCode());
+        // 托管应用在签发后仍可能被撤销，兑换时再次检查当前准入确认。
+        if (directoryService.getApplication(request.getAppCode()).isManagedSync()
+                && !directoryService.isAuthorized(payload.getExternalUserId(), request.getAppCode())) {
+            throw new com.hypers.account.sso.SsoTicketException("user is not authorized for application");
+        }
+        return payload;
     }
 
     public static class IssueTicketRequest {

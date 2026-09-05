@@ -655,8 +655,9 @@ paths:
       operationId: changeUserApplicationAccess
       summary: 修改用户准入期望状态
       description: >-
-        当前只持久化期望状态和待投递命令，不启动 Outbox Worker；
-        integrationStatus 固定为 pending_application_adaptation。
+        保存期望状态和持久化同步命令；仅显式启用并配置的目标会投递。
+        已纳入托管的应用必须收到匹配版本的确认后才允许新登录。
+        重新启用已有映射的准入须 confirmPermissionReuse=true。
       security:
         - sessionCookie: []
       parameters:
@@ -672,11 +673,54 @@ paths:
               $ref: '#/components/schemas/ChangeApplicationAccessRequest'
       responses:
         '202':
-          description: 期望状态已保存，业务应用仍待适配
+          description: 期望状态已保存；实际确认状态见响应字段，不代表菜单权限已配置
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApplicationAccessResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /api/users/{userId}/applications/{appCode}/synchronizations:
+    post:
+      tags: [ApplicationAccess]
+      operationId: retryUserApplicationSynchronization
+      summary: 重新安排最新准入版本的失败或待适配同步命令
+      description: 仅管理员可操作；不改变准入版本，同一幂等键重试不重复安排。全部响应 no-store。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion]
+              properties:
+                expectedVersion:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+      responses:
+        '202':
+          description: 已安排同步，尚不代表应用已确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationAccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -1357,6 +1401,11 @@ components:
           type: integer
           format: int64
           minimum: 0
+          maximum: 9007199254740990
+        confirmPermissionReuse:
+          type: boolean
+          default: false
+          description: 明确确认重新启用可能复用应用已有的菜单及数据权限
         reason:
           type: string
           minLength: 1
@@ -1372,6 +1421,7 @@ components:
         - desiredStatus
         - version
         - integrationStatus
+        - retryable
       properties:
         userId:
           type: string
@@ -1389,7 +1439,22 @@ components:
           minimum: 0
         integrationStatus:
           type: string
-          enum: [pending_application_adaptation]
+          enum: [pending_application_adaptation, pending, processing, retry_wait, succeeded, failed, superseded, expired]
+        appliedStatus:
+          type: [string, 'null']
+          enum: [enabled, disabled, null]
+        appliedVersion:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 9007199254740991
+        lastSyncedAt:
+          type: [string, 'null']
+          format: date-time
+        lastErrorCode:
+          type: [string, 'null']
+          description: 稳定错误码，不含内部异常或用户资料
+        retryable:
+          type: boolean
         syncCommandId:
           type: [string, 'null']
         updatedAt:

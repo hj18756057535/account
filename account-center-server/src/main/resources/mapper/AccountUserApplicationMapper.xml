@@ -19,6 +19,7 @@
         <result property="secretState" column="secret_state"/>
         <result property="protocolCapabilities" column="protocol_capabilities"/>
         <result property="version" column="application_version"/>
+        <result property="managedSync" column="managed_sync"/>
         <result property="createdBy" column="created_by"/>
         <result property="updatedBy" column="updated_by"/>
         <result property="createdAt" column="created_at"/>
@@ -33,6 +34,10 @@
         <result property="integrationStatus" column="integration_status"/>
         <result property="syncCommandId" column="sync_command_id"/>
         <result property="updatedAt" column="updated_at"/>
+        <result property="appliedStatus" column="applied_status"/>
+        <result property="appliedVersion" column="applied_version"/>
+        <result property="lastSyncedAt" column="last_synced_at"/>
+        <result property="lastErrorCode" column="last_error_code"/>
     </resultMap>
 
     <!-- 授权：建立用户-应用关联 -->
@@ -56,38 +61,52 @@
 
     <!-- 判断用户是否已授权某应用（0=未授权，>0=已授权） -->
     <select id="countByUserAndApp" resultType="int">
-        select count(*) from account_user_applications
-        where user_id = #{userId} and app_code = #{appCode} and status = 'enabled'
+        select count(*) from account_user_applications ua
+        join account_applications a on a.app_code = ua.app_code
+        join account_users u on u.id = ua.user_id
+        left join account_application_user_states s on s.user_id = ua.user_id and s.app_code = ua.app_code
+        where ua.user_id = #{userId} and ua.app_code = #{appCode} and ua.status = 'enabled'
+          and (a.managed_sync = false or (u.status = 'enabled' and a.status = 'enabled'
+            and ua.desired_status = 'enabled' and s.applied_status = 'enabled' and s.applied_version = ua.version))
     </select>
 
     <!-- 查询用户已授权的所有应用（JOIN 应用表获取完整信息） -->
     <select id="selectAuthorizedApplications" resultMap="applicationResultMap">
         select a.app_code, a.name, a.entry_url, a.sso_callback_url, a.permission_iframe_url,
                a.notify_base_url, a.secret, a.default_tenant_code, a.status, a.secret_version,
-               a.secret_state, a.protocol_capabilities, a.version as application_version,
+               a.secret_state, a.protocol_capabilities, a.version as application_version, a.managed_sync,
                a.created_by, a.updated_by, a.created_at, a.updated_at
         from account_applications a
         join account_user_applications ua on ua.app_code = a.app_code
+        join account_users u on u.id = ua.user_id
+        left join account_application_user_states s on s.user_id = ua.user_id and s.app_code = ua.app_code
         where ua.user_id = #{userId} and ua.status = 'enabled'
+          and (a.managed_sync = false or (u.status = 'enabled' and a.status = 'enabled'
+            and ua.desired_status = 'enabled' and s.applied_status = 'enabled' and s.applied_version = ua.version))
         order by a.app_code
     </select>
 
-    <select id="selectAccessByUser" resultMap="applicationAccessResultMap">
-        select ua.user_id, ua.app_code, ua.desired_status, ua.version,
-               'pending_application_adaptation' as integration_status,
-               null as sync_command_id,
-               ua.updated_at
+    <sql id="accessQuery">
+        select ua.user_id, ua.app_code, ua.desired_status, ua.version, ua.updated_at,
+               coalesce(c.status, 'pending_application_adaptation') as integration_status,
+               c.id as sync_command_id, c.error_code as last_error_code,
+               s.applied_status, s.applied_version, s.last_synced_at
         from account_user_applications ua
+        left join account_application_user_states s on s.user_id = ua.user_id and s.app_code = ua.app_code
+        left join account_sync_commands c on c.user_id = ua.user_id and c.app_code = ua.app_code
+            and c.sync_version = ua.version
+            and not exists (select 1 from account_sync_commands newer
+                where newer.user_id = c.user_id and newer.app_code = c.app_code and newer.sync_version = c.sync_version
+                  and (newer.created_at &gt; c.created_at or (newer.created_at = c.created_at and newer.id &gt; c.id)))
+    </sql>
+    <select id="selectAccessByUser" resultMap="applicationAccessResultMap">
+        <include refid="accessQuery"/>
         where ua.user_id = #{userId}
         order by ua.app_code
     </select>
 
     <select id="selectAccess" resultMap="applicationAccessResultMap">
-        select ua.user_id, ua.app_code, ua.desired_status, ua.version,
-               'pending_application_adaptation' as integration_status,
-               null as sync_command_id,
-               ua.updated_at
-        from account_user_applications ua
+        <include refid="accessQuery"/>
         where ua.user_id = #{userId} and ua.app_code = #{appCode}
     </select>
 

@@ -25,6 +25,7 @@ public class ManagementApplicationWriteService {
     private final AccountDirectoryService directoryService;
     private final AuditLogService auditLogService;
     private final Clock clock;
+    private final com.hypers.account.app.ApplicationSynchronizationService synchronizationService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -127,6 +128,16 @@ public class ManagementApplicationWriteService {
                                           long expectedVersion,
                                           String traceId,
                                           String operatorId) {
+        return changeAccess(userId, appCode, desiredStatus, expectedVersion, traceId, operatorId, false);
+    }
+
+    @Transactional
+    public ApplicationAccess changeAccess(String userId, String appCode, String desiredStatus, long expectedVersion,
+                                          String traceId, String operatorId, boolean confirmPermissionReuse) {
+        if (expectedVersion < 0 || expectedVersion >= 9007199254740991L)
+            throw new ApiException(HttpStatus.CONFLICT, "RESOURCE_VERSION_CONFLICT", "error.accessConflict");
+        synchronizationService.prepareChange(appCode);
+        synchronizationService.requireReuseConfirmation(userId, appCode, desiredStatus, confirmPermissionReuse);
         String commandId = UUID.randomUUID().toString().replace("-", "");
         Instant now = clock.instant();
         ApplicationSyncCommand syncCommand = new ApplicationSyncCommand(
@@ -143,10 +154,13 @@ public class ManagementApplicationWriteService {
         try {
             ApplicationAccess access = directoryService.changeUserApplicationAccess(
                     userId, appCode, desiredStatus, expectedVersion, operatorId, syncCommand);
+            access.setIntegrationStatus(synchronizationService.created(commandId, operatorId));
+            synchronizationService.populateConfirmation(access);
+            synchronizationService.decorate(access, directoryService.getApplication(appCode));
             auditLogService.log(operatorId, "APPLICATION_ACCESS_CHANGED", "USER_APPLICATION",
                     userId + ":" + appCode,
                     "{\"desiredStatus\":\"" + desiredStatus
-                            + "\",\"syncState\":\"pending_application_adaptation\"}");
+                            + "\",\"syncState\":\"" + access.getIntegrationStatus() + "\"}");
             return access;
         } catch (ResourceVersionConflictException exception) {
             throw new ApiException(HttpStatus.CONFLICT,

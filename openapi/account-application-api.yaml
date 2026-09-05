@@ -18,6 +18,12 @@ paths:
       tags: [Account User Sync]
       operationId: applyAccountUserDesiredState
       summary: 幂等应用 Account 用户期望状态
+      description: >-
+        托管同步要求提供方在同一数据库事务中保存身份绑定、已应用版本及幂等结果。
+        相同幂等键必须校验相同请求并重放既有结果；同版本不同请求和过时版本拒绝为 409。
+        Account 仅接收与命令完全相同的应用、用户、状态和版本，禁止使用更大版本代替确认。
+        Starter 内存 Guard 不是持久化保证，真实业务 Handler 必须自行实现跨重启和多实例幂等。
+        旧接入仍保留原兼容语义；以下托管约束不表示自动迁移旧客户端。
       parameters:
         - name: globalUserId
           in: path
@@ -124,6 +130,8 @@ components:
           minLength: 1
         localUserId:
           type: [string, 'null']
+          maxLength: 255
+          description: 已确认的应用本地身份；为空时由应用明确创建，不按账号自动合并。
         account:
           type: string
           minLength: 1
@@ -145,6 +153,7 @@ components:
           type: integer
           format: int64
           minimum: 1
+          maximum: 9007199254740991
         occurredAt:
           type: string
           format: date-time
@@ -159,6 +168,8 @@ components:
           type: string
         localUserId:
           type: string
+          minLength: 1
+          maxLength: 255
         appliedStatus:
           type: string
           enum: [enabled, disabled]
@@ -166,9 +177,12 @@ components:
           type: integer
           format: int64
           minimum: 1
+          maximum: 9007199254740991
+          description: 托管同步必须等于本次 syncVersion，不接受更高版本代替回执。
         resultCode:
           type: string
           examples: [APPLIED]
+          description: 托管同步仅接受 APPLIED 或 ALREADY_APPLIED；旧接入由原消费者解释。
     ErrorResponse:
       type: object
       additionalProperties: false

@@ -19,6 +19,7 @@
         <result property="secretState" column="secret_state"/>
         <result property="protocolCapabilities" column="protocol_capabilities"/>
         <result property="version" column="version"/>
+        <result property="managedSync" column="managed_sync"/>
         <result property="createdBy" column="created_by"/>
         <result property="updatedBy" column="updated_by"/>
         <result property="createdAt" column="created_at"/>
@@ -70,7 +71,7 @@
     <select id="selectByAppCode" resultMap="applicationResultMap">
         select app_code, name, entry_url, sso_callback_url, permission_iframe_url, notify_base_url,
                secret, default_tenant_code, status, secret_version, secret_state,
-               protocol_capabilities, version, created_by, updated_by, created_at, updated_at
+               protocol_capabilities, version, managed_sync, created_by, updated_by, created_at, updated_at
         from account_applications where app_code = #{appCode}
     </select>
 
@@ -78,7 +79,7 @@
     <select id="selectByKeyword" resultMap="applicationResultMap">
         select app_code, name, entry_url, sso_callback_url, permission_iframe_url, notify_base_url,
                secret, default_tenant_code, status, secret_version, secret_state,
-               protocol_capabilities, version, created_by, updated_by, created_at, updated_at
+               protocol_capabilities, version, managed_sync, created_by, updated_by, created_at, updated_at
         from account_applications
         <where>
             <if test="status != null and status != ''">

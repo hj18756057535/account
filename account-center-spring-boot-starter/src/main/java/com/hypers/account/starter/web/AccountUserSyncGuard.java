@@ -32,7 +32,7 @@ public class AccountUserSyncGuard {
             }
             AccountUserSyncResult result;
             try {
-                result = handler.apply(desiredState);
+                result = handler.apply(idempotencyKey, desiredState);
             } catch (AccountIntegrationException exception) {
                 throw exception;
             } catch (RuntimeException exception) {

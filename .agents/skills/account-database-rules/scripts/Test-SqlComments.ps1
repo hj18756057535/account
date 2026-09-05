@@ -57,6 +57,9 @@ function Test-SqlCommentText {
             else { $targets[$target] = $Matches[3] -match '[\u3400-\u9fff]' }
         } elseif ($code -match '^alter\s+table\s+\w+\s+add\s+column\s+\w+\s+.+;$') {
             $columns++
+            $addedColumn = [regex]::Match($code, '(?i)^alter\s+table\s+(\w+)\s+add\s+column\s+(\w+)')
+            $target = ($addedColumn.Groups[1].Value + '.' + $addedColumn.Groups[2].Value).ToLowerInvariant()
+            $columnComments[$target] = $code -match "(?i)\scomment\s+'(?:''|[^'])*[\u3400-\u9fff](?:''|[^'])*';$"
             if (-not $hasChinese) { $issues.Add("${lineNumber}: ADD COLUMN 缺少行末中文说明") }
             if ($code -match ';.+\S|,\s*add\b') { $issues.Add("${lineNumber}: 每条 ADD COLUMN 必须独占一行") }
         } elseif ($code -and $code -notmatch '^create\s+(?:unique\s+)?index\s+.+;$') {

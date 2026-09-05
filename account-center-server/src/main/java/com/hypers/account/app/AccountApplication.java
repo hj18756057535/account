@@ -26,6 +26,7 @@ public class AccountApplication {
     private String secretState;
     private String protocolCapabilities;
     private Long version;
+    private boolean managedSync;
     private String createdBy;
     private String updatedBy;
     private Instant createdAt;

@@ -25,6 +25,9 @@ Write-Output "Passed $($cases.Count) SQL comment checker cases."
 $postgres = "-- 示例表`ncreate table account_example (`n id bigint -- 标识`n);`ncomment on table account_example is '示例表';`ncomment on column account_example.id is '标识';"
 $mysql = "-- 示例表`ncreate table account_example (`n id bigint comment '标识', -- 标识`n payload longtext comment '内容' -- 内容`n) engine=InnoDB default charset=utf8mb4 comment='示例表';"
 $metadataCases = @(
+    @{ Name = 'PostgreSQL added column'; Valid = $true; Sql = "alter table account_example add column note text; -- 说明`ncomment on column account_example.note is '说明';" },
+    @{ Name = 'MySQL added column'; Valid = $true; Sql = "alter table account_example add column note text comment '说明'; -- 说明" },
+    @{ Name = 'added column missing metadata'; Valid = $false; Sql = 'alter table account_example add column note text; -- 说明' },
     @{ Name = 'PostgreSQL complete'; Valid = $true; Sql = $postgres },
     @{ Name = 'MySQL complete'; Valid = $true; Sql = $mysql },
     @{ Name = 'PostgreSQL missing column'; Valid = $false; Sql = $postgres.Replace("comment on column account_example.id is '标识';", '') },

@@ -19,4 +19,15 @@ public class ApplicationAccess {
     String integrationStatus;
     String syncCommandId;
     Instant updatedAt;
+    String appliedStatus;
+    Long appliedVersion;
+    Instant lastSyncedAt;
+    String lastErrorCode;
+    boolean retryable;
+
+    public ApplicationAccess(String userId, String appCode, String desiredStatus, long version,
+                             String integrationStatus, String syncCommandId, Instant updatedAt) {
+        this(userId, appCode, desiredStatus, version, integrationStatus, syncCommandId, updatedAt,
+                null, null, null, null, false);
+    }
 }

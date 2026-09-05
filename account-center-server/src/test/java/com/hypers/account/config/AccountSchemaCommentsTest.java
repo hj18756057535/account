@@ -27,7 +27,7 @@ class AccountSchemaCommentsTest {
             var source = new DriverManagerDataSource("jdbc:h2:mem:init_" + UUID.randomUUID()
                     + ";MODE=" + mode + ";DB_CLOSE_DELAY=-1", "sa", "");
             var flyway = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor)
-                    .baselineOnMigrate(false).load();
+                    .baselineOnMigrate(false).target("1").load();
             assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
             var jdbc = new JdbcTemplate(source);
@@ -54,6 +54,18 @@ class AccountSchemaCommentsTest {
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
             flyway.validate();
+            var upgrade = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor).load();
+            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(upgrade.info().current().getVersion().getVersion()).isEqualTo("2");
+            assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
+            assertThat(jdbc.queryForList("select remarks from information_schema.columns "
+                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class))
+                    .hasSize(116).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
+            assertThat(jdbc.queryForList("select remarks from information_schema.tables "
+                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class))
+                    .hasSize(11).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
+            assertThat(upgrade.migrate().migrationsExecuted).isZero();
+            upgrade.validate();
         }
     }
 
