@@ -327,9 +327,10 @@ public class ManagementApplicationController {
         @Size(max = 64, message = "validation.tenant.size")
         private String defaultTenantCode;
         @NotEmpty(message = "validation.protocol.notEmpty")
-        @Size(max = 3, message = "validation.protocol.size")
+        @Size(max = 4, message = "validation.protocol.size")
         private List<@NotNull(message = "validation.protocol.required")
-                @Pattern(regexp = "sso|admin_ticket|user_sync", message = "validation.protocol.supported") String>
+                @Pattern(regexp = "sso|admin_ticket|user_sync|menu_permission_v1",
+                        message = "validation.protocol.supported") String>
                 protocolCapabilities;
 
         protected SaveApplicationCommand toCommand(String appCode, long version) {
@@ -454,6 +455,7 @@ public class ManagementApplicationController {
         String appCode;
         String applicationName;
         String applicationStatus;
+        List<String> protocolCapabilities;
         String desiredStatus;
         long version;
         String integrationStatus;
@@ -465,6 +467,10 @@ public class ManagementApplicationController {
                     access.getUserId(), access.getAppCode(),
                     application == null ? access.getAppCode() : application.getName(),
                     application == null ? "disabled" : application.getStatus(),
+                    application == null || application.getProtocolCapabilities() == null
+                            ? Collections.emptyList()
+                            : Arrays.stream(application.getProtocolCapabilities().split(","))
+                            .map(String::trim).filter(value -> !value.isEmpty()).collect(Collectors.toList()),
                     access.getDesiredStatus(), access.getVersion(), access.getIntegrationStatus(),
                     access.getSyncCommandId(), access.getUpdatedAt(), access.getAppliedStatus(), access.getAppliedVersion(),
                     access.getLastSyncedAt(), access.getLastErrorCode(), access.isRetryable());

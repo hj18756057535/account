@@ -8,7 +8,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = AccountUserSyncController.class)
+@RestControllerAdvice(assignableTypes = {AccountUserSyncController.class, AccountMenuPermissionController.class})
 public class AccountIntegrationExceptionHandler {
 
     @ExceptionHandler(AccountIntegrationException.class)

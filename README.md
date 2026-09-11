@@ -25,7 +25,7 @@
 
 - 后端中英支持覆盖管理 API、旧票据/签名错误、框架兜底及登录/SSO 模板；Starter 集成错误也支持 Accept-Language。只翻译展示消息，业务编码、数据和签名保持不变；未知内部错误不直接返回给调用方。SSR 页面使用浏览器请求语言，不读取 Vue 的 localStorage。
 
-- 需求正文统一保存在工作区 `requirements/features/ACCOUNT-001/requirement.md`；执行范围以 `.agent-work/ACCOUNT-001/` 中已批准的规格、设计和计划为准。旧后端需求/SSO 计划已移除，保留 [架构说明](docs/architecture.md) 与 [接入指南](docs/integration-guide.md)。
+- 需求正文统一保存在工作区 `requirements/features/ACCOUNT-001/requirement.md`；执行范围以 `.agent-work/ACCOUNT-001/` 中已批准的规格、设计和计划为准。旧后端需求/SSO 计划已移除，保留 [架构说明](docs/architecture.md)、[接入指南](docs/integration-guide.md) 与 [菜单权限联调说明](docs/menu-permission-integration.md)。
 - 数据库现采用完整初始化基线：[PostgreSQL SQL](account-center-server/src/main/resources/db/vendor/postgresql/V1__init_account_center.sql)、[MySQL SQL](account-center-server/src/main/resources/db/vendor/mysql/V1__init_account_center.sql)。每份包含 10 张表、99 个字段、约束、索引及全部数据库注释，不再保留旧 V1～V8 拆分脚本或重复 schema.sql。
 - **仅用于空库**：开发者已确认当前为可重建测试库。先停止旧应用并自行备份/处理数据，提供空数据库或空 schema（旧业务表与旧 flyway_schema_history 均不能残留）；清理旧构建产物后启动，新代码按数据库类型只执行对应 V1，并由 Flyway 自动记录历史。不要同时手工执行 SQL 和应用自动初始化；SQL 文件可直接审阅，默认交给 Flyway 执行。
 - 代码强制关闭自动 baseline、禁止 Flyway clean，不自动清库，不兼容旧迁移历史；发现旧库时停止并检查，不使用 repair 忽略差异。若选择手工执行 SQL，需另行正确建立版本 1 的 Flyway baseline，不要伪造历史记录。临时 sql/init.sql 不作为入口，也不参与构建。

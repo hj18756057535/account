@@ -8,7 +8,9 @@ import com.hypers.account.starter.properties.AccountIntegrationProperties;
 import com.hypers.account.starter.security.AccountIntegrationSignatureFilter;
 import com.hypers.account.starter.security.AccountNonceStore;
 import com.hypers.account.starter.sign.AccountHmacSigner;
+import com.hypers.account.starter.spi.AccountMenuPermissionHandler;
 import com.hypers.account.starter.spi.AccountUserSyncHandler;
+import com.hypers.account.starter.web.AccountMenuPermissionController;
 import com.hypers.account.starter.web.AccountIntegrationExceptionHandler;
 import com.hypers.account.starter.web.AccountUserSyncController;
 import com.hypers.account.starter.web.AccountUserSyncGuard;
@@ -92,14 +94,21 @@ public class AccountIntegrationAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(AccountUserSyncHandler.class)
+    @ConditionalOnBean(AccountMenuPermissionHandler.class)
+    @ConditionalOnProperty(prefix = "account.integration", name = "provider-enabled", havingValue = "true", matchIfMissing = true)
+    public AccountMenuPermissionController accountMenuPermissionController(
+            AccountIntegrationProperties properties,
+            AccountMenuPermissionHandler handler) {
+        return new AccountMenuPermissionController(properties, handler);
+    }
+
+    @Bean
     @ConditionalOnProperty(prefix = "account.integration", name = "provider-enabled", havingValue = "true", matchIfMissing = true)
     public AccountIntegrationExceptionHandler accountIntegrationExceptionHandler() {
         return new AccountIntegrationExceptionHandler();
     }
 
     @Bean
-    @ConditionalOnBean(AccountUserSyncHandler.class)
     @ConditionalOnProperty(prefix = "account.integration", name = "provider-enabled", havingValue = "true", matchIfMissing = true)
     public AccountNonceStore accountNonceStore(
             @Qualifier("accountIntegrationClock") Clock accountIntegrationClock) {
@@ -107,7 +116,6 @@ public class AccountIntegrationAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(AccountUserSyncHandler.class)
     @ConditionalOnProperty(prefix = "account.integration", name = "provider-enabled", havingValue = "true", matchIfMissing = true)
     public FilterRegistrationBean<AccountIntegrationSignatureFilter> accountIntegrationSignatureFilter(
             AccountIntegrationProperties properties,
@@ -118,7 +126,10 @@ public class AccountIntegrationAutoConfiguration {
         FilterRegistrationBean<AccountIntegrationSignatureFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new AccountIntegrationSignatureFilter(
                 properties, signer, nonceStore, objectMapper, accountIntegrationClock));
-        registration.addUrlPatterns("/account-integration/users/*");
+        registration.addUrlPatterns(
+                "/account-integration/users/*",
+                "/account-integration/v1/menu-permissions",
+                "/account-integration/v1/menu-permissions/*");
         registration.setOrder(1);
         return registration;
     }

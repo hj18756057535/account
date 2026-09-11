@@ -1,0 +1,10 @@
+{
+  "protocolVersion": "menu_permission_v1",
+  "method": "POST",
+  "path": "/account-integration/v1/menu-permissions/query",
+  "timestamp": "1788590400000",
+  "nonce": "nonce-0000000001",
+  "secret": "synthetic-secret",
+  "body": "{\"protocolVersion\":\"menu_permission_v1\",\"appCode\":\"synthetic-app\",\"globalUserId\":\"user-1\",\"localUserId\":\"local-1\",\"account\":\"user.one\",\"locale\":\"zh-CN\"}",
+  "signature": "ouZra4r2xK1rE6JmYSJ5N5Qh22p4OIRRKk5sJdb7Lfs="
+}

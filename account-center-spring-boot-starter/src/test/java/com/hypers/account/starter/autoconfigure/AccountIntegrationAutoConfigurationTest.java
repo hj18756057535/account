@@ -3,9 +3,12 @@ package com.hypers.account.starter.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hypers.account.contract.application.AccountUserSyncResult;
+import com.hypers.account.contract.application.MenuPermissionSnapshot;
 import com.hypers.account.starter.client.AccountAdminTicketClient;
 import com.hypers.account.starter.client.AccountSsoClient;
 import com.hypers.account.starter.spi.AccountUserSyncHandler;
+import com.hypers.account.starter.spi.AccountMenuPermissionHandler;
+import com.hypers.account.starter.web.AccountMenuPermissionController;
 import com.hypers.account.starter.web.AccountUserSyncController;
 import java.net.http.HttpClient;
 import org.junit.jupiter.api.Test;
@@ -45,6 +48,28 @@ class AccountIntegrationAutoConfigurationTest {
                         .resultCode("APPLIED")
                         .build())
                 .run(context -> assertThat(context).hasSingleBean(AccountUserSyncController.class));
+    }
+
+    @Test
+    void publishesMenuProviderWithoutRequiringUserSyncHandler() {
+        contextRunner.withBean(AccountMenuPermissionHandler.class, () -> new AccountMenuPermissionHandler() {
+                    @Override
+                    public MenuPermissionSnapshot query(
+                            com.hypers.account.contract.application.MenuPermissionQuery query) {
+                        return new MenuPermissionSnapshot();
+                    }
+
+                    @Override
+                    public MenuPermissionSnapshot replace(
+                            String idempotencyKey,
+                            com.hypers.account.contract.application.MenuPermissionReplaceCommand command) {
+                        return new MenuPermissionSnapshot();
+                    }
+                })
+                .run(context -> {
+                    assertThat(context).hasSingleBean(AccountMenuPermissionController.class);
+                    assertThat(context).doesNotHaveBean(AccountUserSyncController.class);
+                });
     }
 
     @Test

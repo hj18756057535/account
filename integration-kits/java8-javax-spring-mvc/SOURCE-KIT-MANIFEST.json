@@ -1,0 +1,24 @@
+{
+  "protocolVersion": "menu_permission_v1",
+  "sourceRevision": "WORKTREE@057d773",
+  "generatedAt": "2026-09-05",
+  "files": {
+    "src/main/java/com/hypers/account/integration/menu/AccountHmacSigner.java": "128f11dba04cb8d097bddbd6bc2836c3a390339fc0236b12b9065d47c21e449b",
+    "src/main/java/com/hypers/account/integration/menu/AccountIntegrationErrorResponse.java": "daa04b2b561d1292719c17626bf9ba6a25f132d81008356550a0d1e335134224",
+    "src/main/java/com/hypers/account/integration/menu/AccountIntegrationException.java": "6dd6b4c395f98b949db6c5ae56af7969bf7e3cb9c3a877e2286c26cab4d18d4a",
+    "src/main/java/com/hypers/account/integration/menu/AccountIntegrationExceptionHandler.java": "65cde57b30a638ebb124697b477aa6f5b1183d6802ff888ef1398ef892e66781",
+    "src/main/java/com/hypers/account/integration/menu/AccountIntegrationMessages.java": "5920714e71ef44637645dc580e4168266d1f1998fe0c6669d873fed8c0093937",
+    "src/main/java/com/hypers/account/integration/menu/AccountMenuPermissionController.java": "dbcc3abf0096cc7c06307aff6e8a3d8c3b6a9232a4d5f31c0e189ff7a37d25c6",
+    "src/main/java/com/hypers/account/integration/menu/AccountMenuPermissionHandler.java": "3a2fc4fc335d2a2c4de21a8b0571787e9555409a09f146cb0e27ef5818c5cf29",
+    "src/main/java/com/hypers/account/integration/menu/AccountMenuPermissionProtocol.java": "c0b25c48837ec1b6e69533bc3c3166db1b057f64967c5f54bec19f780683e533",
+    "src/main/java/com/hypers/account/integration/menu/AccountMenuPermissionSignatureFilter.java": "7b91269151d52ea02ac0255dad67d8758087cf1afb6e3a1d04fd54341496a0eb",
+    "src/main/java/com/hypers/account/integration/menu/AccountNonceStore.java": "5ce3833675922fb4aed5f1c5ad5e103ec291a517dde66ec2c5a4400e841ab1bc",
+    "src/main/java/com/hypers/account/integration/menu/CachedBodyHttpServletRequest.java": "64bd81ef2bdadd38629e50dddb71f520be120dbc2d9f7afe91074d5d2c33128a",
+    "src/main/java/com/hypers/account/integration/menu/InMemoryAccountNonceStore.java": "9064645870cff4e921435223b9e51987c70b6565f87cbaa068d3999af2dde29b",
+    "src/main/java/com/hypers/account/integration/menu/MenuPermissionContractValidator.java": "586ec091efca3b881676b4193328376222a25e9be3c92291e7cad8ac589a7176",
+    "src/main/java/com/hypers/account/integration/menu/MenuPermissionNode.java": "2e6bcd31c1549799d35e717e328f7be7b8231531c52b2371ec9fec438e2472c9",
+    "src/main/java/com/hypers/account/integration/menu/MenuPermissionQuery.java": "9235ce7978b6109141c91de648525c5652006ec767d6295ce57d84ffc5ff54fd",
+    "src/main/java/com/hypers/account/integration/menu/MenuPermissionReplaceCommand.java": "1afca3b5b358ef8a15f1603305833d132606b2e71038ee8764bc9882f1bd16f9",
+    "src/main/java/com/hypers/account/integration/menu/MenuPermissionSnapshot.java": "b87642d0c7b591dd42dad304312397617a26d980a35eb935cf35f2d02252a082"
+  }
+}

@@ -727,6 +727,97 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+  /api/users/{userId}/applications/{appCode}/menu-permissions:
+    get:
+      tags: [ApplicationAccess]
+      operationId: getUserApplicationMenuPermissions
+      summary: 查询已准入用户在目标应用中的菜单权限
+      description: >-
+        仅管理员可调用。用户准入、应用同步、本地身份映射和 menu_permission_v1 capability
+        均有效时，Account 才会调用应用 Provider；Account 不保存菜单明细。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/AppCode'
+      responses:
+        '200':
+          description: 应用返回的当前权限快照和准入版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuPermissionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '503':
+          description: 应用 Provider 不可用、超时或返回非法响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [ApplicationAccess]
+      operationId: replaceUserApplicationMenuPermissions
+      summary: 整集替换 Account 在目标应用中托管的菜单权限
+      description: >-
+        仅管理员可调用；同一 Idempotency-Key 用于 Account 管理 API 和目标 Provider 的安全重试。
+        空 selectedCodes 仅清空 Account 托管项，不影响应用原生角色权限。
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/AppCode'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceMenuPermissionRequest'
+      responses:
+        '200':
+          description: 应用事务提交后返回的归一化权限快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuPermissionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          description: 授权集合超过协议限制
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '426':
+          description: 目标应用不支持当前协议版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 应用 Provider 不可用、超时或返回非法响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /openapi/sso/tickets/exchange:
     post:
       tags: [Integration]
@@ -1195,7 +1286,7 @@ components:
       enum: [enabled, disabled]
     ApplicationProtocolCapability:
       type: string
-      enum: [sso, admin_ticket, user_sync]
+      enum: [sso, admin_ticket, user_sync, menu_permission_v1]
     ApplicationSecretState:
       type: string
       enum: [active, revoked]
@@ -1241,7 +1332,7 @@ components:
         protocolCapabilities:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 4
           uniqueItems: true
           items:
             $ref: '#/components/schemas/ApplicationProtocolCapability'
@@ -1291,7 +1382,7 @@ components:
         protocolCapabilities:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 4
           uniqueItems: true
           items:
             $ref: '#/components/schemas/ApplicationProtocolCapability'
@@ -1418,6 +1509,7 @@ components:
         - appCode
         - applicationName
         - applicationStatus
+        - protocolCapabilities
         - desiredStatus
         - version
         - integrationStatus
@@ -1431,6 +1523,10 @@ components:
           type: string
         applicationStatus:
           $ref: '#/components/schemas/ApplicationStatus'
+        protocolCapabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationProtocolCapability'
         desiredStatus:
           $ref: '#/components/schemas/ApplicationStatus'
         version:
@@ -1460,6 +1556,104 @@ components:
         updatedAt:
           type: [string, 'null']
           format: date-time
+    ReplaceMenuPermissionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedAccessVersion, expectedCatalogRevision, expectedPermissionRevision, selectedCodes]
+      properties:
+        expectedAccessVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        expectedCatalogRevision:
+          type: string
+          minLength: 1
+          maxLength: 256
+        expectedPermissionRevision:
+          type: string
+          minLength: 1
+          maxLength: 256
+        selectedCodes:
+          type: array
+          maxItems: 5000
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '^[\x21-\x7E]+$'
+    MenuPermissionResponse:
+      type: object
+      additionalProperties: false
+      required: [accessVersion, catalogRevision, permissionRevision, assignmentMode, nodes, selectedCodes, inheritedCodes]
+      properties:
+        accessVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        catalogRevision:
+          type: string
+          minLength: 1
+          maxLength: 256
+        permissionRevision:
+          type: string
+          minLength: 1
+          maxLength: 256
+        assignmentMode:
+          type: string
+          const: ADDITIVE
+        nodes:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/MenuPermissionNode'
+        selectedCodes:
+          type: array
+          maxItems: 5000
+          uniqueItems: true
+          items:
+            type: string
+        inheritedCodes:
+          type: array
+          maxItems: 10000
+          uniqueItems: true
+          items:
+            type: string
+    MenuPermissionNode:
+      type: object
+      additionalProperties: false
+      required: [code, nodeType, defaultName, localizedNames, assignable, sort]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[\x21-\x7E]+$'
+        parentCode:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 128
+          pattern: '^[\x21-\x7E]+$'
+        nodeType:
+          type: string
+          enum: [GROUP, MENU, ACTION]
+        defaultName:
+          type: string
+          minLength: 1
+          maxLength: 256
+        localizedNames:
+          type: object
+          maxProperties: 16
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 256
+        assignable:
+          type: boolean
+        sort:
+          type: integer
     ErrorResponse:
       type: object
       additionalProperties: false

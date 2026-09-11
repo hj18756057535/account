@@ -2,6 +2,8 @@ package com.hypers.account.starter.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.contract.AccountIntegrationHeaders;
+import com.hypers.account.contract.AccountIntegrationPaths;
+import com.hypers.account.contract.MenuPermissionProtocol;
 import com.hypers.account.starter.properties.AccountIntegrationProperties;
 import com.hypers.account.starter.sign.AccountHmacSigner;
 import com.hypers.account.starter.web.AccountIntegrationErrorResponse;
@@ -35,12 +37,27 @@ public class AccountIntegrationSignatureFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         response.setHeader("Content-Language", AccountIntegrationMessages.locale(request).toLanguageTag());
         response.addHeader("Vary", "Accept-Language");
-        byte[] body = request.getInputStream().readAllBytes();
+        boolean menuPermissionRequest = isMenuPermissionPath(request);
+        byte[] body = menuPermissionRequest
+                ? request.getInputStream().readNBytes(MenuPermissionProtocol.MAX_REQUEST_BYTES + 1)
+                : request.getInputStream().readAllBytes();
+        if (menuPermissionRequest && body.length > MenuPermissionProtocol.MAX_REQUEST_BYTES) {
+            writeError(request, response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE,
+                    "PAYLOAD_TOO_LARGE");
+            return;
+        }
         CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(request, body);
+        if (menuPermissionRequest && !MenuPermissionProtocol.VERSION.equals(
+                request.getHeader(AccountIntegrationHeaders.PROTOCOL_VERSION))) {
+            writeError(request, response, org.springframework.http.HttpStatus.UPGRADE_REQUIRED.value(),
+                    "PROTOCOL_VERSION_UNSUPPORTED");
+            return;
+        }
         try {
             verifyRequest(request, new String(body, StandardCharsets.UTF_8));
         } catch (IllegalArgumentException exception) {
-            writeUnauthorized(request, response);
+            writeError(request, response, HttpServletResponse.SC_UNAUTHORIZED,
+                    menuPermissionRequest ? "INTEGRATION_AUTH_FAILED" : "AUTHENTICATION_REQUIRED");
             return;
         }
         filterChain.doFilter(wrappedRequest, response);
@@ -86,13 +103,22 @@ public class AccountIntegrationSignatureFilter extends OncePerRequestFilter {
         return value;
     }
 
-    private void writeUnauthorized(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+    private boolean isMenuPermissionPath(HttpServletRequest request) {
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        return AccountIntegrationPaths.MENU_PERMISSION_QUERY.equals(path)
+                || AccountIntegrationPaths.MENU_PERMISSION_REPLACE.equals(path);
+    }
+
+    private void writeError(HttpServletRequest request,
+                            HttpServletResponse response,
+                            int status,
+                            String code) throws IOException {
+        response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         objectMapper.writeValue(response.getOutputStream(), AccountIntegrationErrorResponse.builder()
-                .code("AUTHENTICATION_REQUIRED")
-                .message(AccountIntegrationMessages.text(request, "AUTHENTICATION_REQUIRED"))
+                .code(code)
+                .message(AccountIntegrationMessages.text(request, code))
                 .traceId(UUID.randomUUID().toString())
                 .build());
     }

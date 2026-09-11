@@ -2,6 +2,7 @@ package com.hypers.account.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -179,6 +180,25 @@ class ManagementApplicationIntegrationTest {
     }
 
     @Test
+    void registrationAcceptsMenuPermissionCapability() throws Exception {
+        ManagementSession management = managementSession(adminSession());
+        ObjectNode body = (ObjectNode) objectMapper.readTree(
+                applicationBody("menu-provider", "https://example.com/callback"));
+        body.set("protocolCapabilities", objectMapper.readTree(
+                "[\"sso\",\"admin_ticket\",\"user_sync\",\"menu_permission_v1\"]"));
+
+        mockMvc.perform(post("/api/applications")
+                        .session(management.session())
+                        .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
+                        .header("Idempotency-Key", "menu-provider-create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.application.protocolCapabilities")
+                        .value(hasItem("menu_permission_v1")));
+    }
+
+    @Test
     void sensitiveValueObjectsDoNotGenerateSecretToString() {
         String secret = "synthetic-sensitive-value";
         SaveApplicationCommand command = new SaveApplicationCommand(
@@ -278,6 +298,33 @@ class ManagementApplicationIntegrationTest {
                         .content("{\"status\":\"disabled\",\"version\":1,\"reason\":\"只读角色\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void menuPermissionManagementRequiresAdminSessionAndCsrf() throws Exception {
+        String path = "/api/users/user-1/applications/app-1/menu-permissions";
+        mockMvc.perform(get(path))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+
+        AccountUser auditor = directoryService.createUser(new SaveUserCommand(
+                "menu-auditor", "menu-auditor@example.com", "菜单审计员", "13800000114"));
+        adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
+        ManagementSession auditSession = managementSession(
+                new AccountSessionUser(auditor.getId(), auditor.getAccount(), auditor.getName()));
+        mockMvc.perform(get(path).session(auditSession.session()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        ManagementSession admin = managementSession(adminSession());
+        mockMvc.perform(put(path)
+                        .session(admin.session())
+                        .header("Idempotency-Key", "menu-permission-csrf-check")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedAccessVersion\":1,\"expectedCatalogRevision\":\"catalog-1\","
+                                + "\"expectedPermissionRevision\":\"permission-1\",\"selectedCodes\":[]}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CSRF_INVALID"));
     }
 
     private void createApplication(

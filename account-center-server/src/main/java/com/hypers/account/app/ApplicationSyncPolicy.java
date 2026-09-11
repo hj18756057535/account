@@ -21,6 +21,10 @@ public class ApplicationSyncPolicy {
     public boolean enabled() { return databaseMode() && properties.isEnabled(); }
 
     public URI target(AccountApplication application) {
+        return target(application, "user_sync");
+    }
+
+    public URI target(AccountApplication application, String requiredCapability) {
         if (!enabled()) throw new ApplicationSyncFailure("SYNC_DISABLED", false);
         if (application == null) throw new ApplicationSyncFailure("SYNC_TARGET_UNAVAILABLE", false);
         URI target = properties.getTargets().get(application.getAppCode());
@@ -28,7 +32,8 @@ public class ApplicationSyncPolicy {
                 || !"active".equals(application.getSecretState()) || application.getSecret() == null
                 || application.getSecret().isBlank() || application.getProtocolCapabilities() == null
                 || application.getNotifyBaseUrl() == null
-                || !Arrays.asList(application.getProtocolCapabilities().split(",")).contains("user_sync")) {
+                || Arrays.stream(application.getProtocolCapabilities().split(","))
+                .map(String::trim).noneMatch(requiredCapability::equals)) {
             throw new ApplicationSyncFailure("SYNC_TARGET_UNAVAILABLE", false);
         }
         boolean loopbackTest = environment.acceptsProfiles(Profiles.of("test"))

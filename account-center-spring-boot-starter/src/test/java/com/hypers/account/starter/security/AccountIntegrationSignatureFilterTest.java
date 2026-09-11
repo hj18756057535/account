@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.contract.AccountIntegrationHeaders;
+import com.hypers.account.contract.AccountIntegrationPaths;
+import com.hypers.account.contract.MenuPermissionProtocol;
 import com.hypers.account.starter.properties.AccountIntegrationProperties;
 import com.hypers.account.starter.sign.AccountHmacSigner;
 import java.nio.charset.StandardCharsets;
@@ -82,6 +84,48 @@ class AccountIntegrationSignatureFilterTest {
                 }))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("business validation");
+    }
+
+    @Test
+    void rejectsUnsupportedMenuProtocolWithStableUpgradeResponse() throws Exception {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-24T08:00:00Z"), ZoneOffset.UTC);
+        AccountIntegrationSignatureFilter filter = new AccountIntegrationSignatureFilter(
+                properties(),
+                new AccountHmacSigner(),
+                new AccountNonceStore(clock),
+                new ObjectMapper(),
+                clock);
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST", AccountIntegrationPaths.MENU_PERMISSION_QUERY);
+        request.setContent("{}".getBytes(StandardCharsets.UTF_8));
+        request.addHeader(AccountIntegrationHeaders.PROTOCOL_VERSION, "unsupported");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(426);
+        assertThat(response.getContentAsString()).contains("PROTOCOL_VERSION_UNSUPPORTED");
+    }
+
+    @Test
+    void rejectsOversizedMenuRequestBeforeAuthentication() throws Exception {
+        Clock clock = Clock.fixed(Instant.parse("2026-08-24T08:00:00Z"), ZoneOffset.UTC);
+        AccountIntegrationSignatureFilter filter = new AccountIntegrationSignatureFilter(
+                properties(),
+                new AccountHmacSigner(),
+                new AccountNonceStore(clock),
+                new ObjectMapper(),
+                clock);
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "PUT", AccountIntegrationPaths.MENU_PERMISSION_REPLACE);
+        request.setContent(new byte[com.hypers.account.contract.MenuPermissionProtocol.MAX_REQUEST_BYTES + 1]);
+        request.addHeader(AccountIntegrationHeaders.PROTOCOL_VERSION, MenuPermissionProtocol.VERSION);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(response.getContentAsString()).contains("PAYLOAD_TOO_LARGE");
     }
 
     private AccountIntegrationProperties properties() {

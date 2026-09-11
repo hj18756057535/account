@@ -9,5 +9,6 @@ public class AccountIntegrationHeaders {
     public static final String TIMESTAMP = "X-Account-Timestamp";
     public static final String NONCE = "X-Account-Nonce";
     public static final String SIGNATURE = "X-Account-Signature";
+    public static final String PROTOCOL_VERSION = "X-Account-Protocol-Version";
     public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
 }

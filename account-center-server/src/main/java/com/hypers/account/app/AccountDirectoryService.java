@@ -128,6 +128,12 @@ public class AccountDirectoryService {
         return result;
     }
 
+    public ApplicationAccess getUserApplicationAccess(String userId, String appCode) {
+        store.requireUser(userId);
+        store.requireApplication(appCode);
+        return store.requireApplicationAccess(userId, appCode);
+    }
+
     public ApplicationAccess changeUserApplicationAccess(String userId,
                                                          String appCode,
                                                          String desiredStatus,
