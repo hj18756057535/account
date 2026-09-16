@@ -13,9 +13,9 @@ spring:
     name: account-center
   datasource:
     driver-class-name: org.postgresql.Driver
-    url: ${ACCOUNT_DB_URL:jdbc:postgresql://localhost:5432/account_center}
-    username: ${ACCOUNT_DB_USERNAME:account}
-    password: ${ACCOUNT_DB_PASSWORD:account}
+    url: ${ACCOUNT_DB_URL:jdbc:postgresql://10.6.3.14:5432/account_center}
+    username: ${ACCOUNT_DB_USERNAME:postgres}
+    password: ${ACCOUNT_DB_PASSWORD:My>i*OWT920y]C1[}
   flyway:
     enabled: true
     locations: classpath:db/migration
