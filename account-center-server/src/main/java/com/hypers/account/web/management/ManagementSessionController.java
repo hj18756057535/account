@@ -35,6 +35,7 @@ public class ManagementSessionController {
     private final AdminAuthorizationService authorizationService;
     private final CsrfTokenManager csrfTokenManager;
     private final UserImportFeature userImportFeature;
+    private final ManagementSecurityAudit securityAudit;
 
     @GetMapping
     public SessionResponse currentSession(HttpServletRequest request) {
@@ -50,12 +51,14 @@ public class ManagementSessionController {
         try {
             user = loginService.authenticate(loginRequest.getAccount(), loginRequest.getPassword());
         } catch (IllegalArgumentException exception) {
+            securityAudit.record(null, "MANAGEMENT_LOGIN_FAILED", false);
             throw new ApiException(HttpStatus.UNAUTHORIZED,
                     "INVALID_CREDENTIALS", "error.credentials");
         }
         List<String> roles = authorizationService.findRoles(user.getUserId());
         if (!roles.contains(AdminAuthorizationService.ACCOUNT_ADMIN)
                 && !roles.contains(AdminAuthorizationService.ACCOUNT_AUDITOR)) {
+            securityAudit.record(user.getUserId(), "MANAGEMENT_ACCESS_DENIED", false);
             request.getSession(false).invalidate();
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "MANAGEMENT_ACCESS_DENIED", "error.managementDenied");
@@ -63,6 +66,7 @@ public class ManagementSessionController {
         request.changeSessionId();
         HttpSession session = request.getSession(false);
         session.setAttribute(AuthController.SESSION_USER_KEY, user);
+        securityAudit.record(user.getUserId(), "MANAGEMENT_LOGIN_SUCCEEDED", true);
         return toResponse(user, csrfTokenManager.ensureToken(session));
     }
 
@@ -70,6 +74,8 @@ public class ManagementSessionController {
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
+            var user = (AccountSessionUser) session.getAttribute(AuthController.SESSION_USER_KEY);
+            if (user != null) securityAudit.record(user.getUserId(), "MANAGEMENT_LOGOUT", true);
             session.invalidate();
         }
         return ResponseEntity.noContent().build();

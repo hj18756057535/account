@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.RequiredArgsConstructor;
 
 public class SsoTicketService {
 
@@ -29,16 +31,18 @@ public class SsoTicketService {
         if (ticket == null) {
             throw new SsoTicketException("ticket not found");
         }
-        if (ticket.used) {
+        if (ticket.used.get()) {
             throw new SsoTicketException("ticket already used");
         }
         if (!ticket.appCode.equals(appCode)) {
             throw new SsoTicketException("ticket application mismatch");
         }
-        if (ticket.expiresAt.isBefore(clock.instant()) || ticket.expiresAt.equals(clock.instant())) {
+        if (!ticket.expiresAt.isAfter(clock.instant())) {
             throw new SsoTicketException("ticket expired");
         }
-        ticket.used = true;
+        if (!ticket.used.compareAndSet(false, true)) {
+            throw new SsoTicketException("ticket already used");
+        }
         AccountUserSnapshot user = ticket.user;
         return new SsoUserPayload(
                 user.getExternalUserId(),
@@ -49,17 +53,12 @@ public class SsoTicketService {
                 user.getTenantCode());
     }
 
+    @RequiredArgsConstructor
     private static class Ticket {
 
         private final String appCode;
         private final AccountUserSnapshot user;
         private final Instant expiresAt;
-        private boolean used;
-
-        private Ticket(String appCode, AccountUserSnapshot user, Instant expiresAt) {
-            this.appCode = appCode;
-            this.user = user;
-            this.expiresAt = expiresAt;
-        }
+        private final AtomicBoolean used = new AtomicBoolean();
     }
 }

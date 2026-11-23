@@ -4,6 +4,30 @@
 <!-- 用户表 Mapper：提供用户 CRUD、状态管理、关键字搜索 -->
 <mapper namespace="com.hypers.account.mapper.AccountUserMapper">
 
+    <resultMap id="overviewCounts" type="com.hypers.account.app.OverviewCounts">
+        <result property="users" column="users"/>
+        <result property="disabledUsers" column="disabled_users"/>
+        <result property="applications" column="applications"/>
+        <result property="disabledApplications" column="disabled_applications"/>
+        <result property="grantedAccess" column="granted_access"/>
+        <result property="missingCallbacks" column="missing_callbacks"/>
+        <result property="longDisabledUsers" column="long_disabled_users"/>
+    </resultMap>
+
+    <select id="selectOverviewCounts" resultMap="overviewCounts">
+        select
+          (select count(*) from account_users) as users,
+          (select count(*) from account_users where status = 'disabled') as disabled_users,
+          (select count(*) from account_applications) as applications,
+          (select count(*) from account_applications where status = 'disabled') as disabled_applications,
+          (select count(*) from account_user_applications where desired_status = 'enabled') as granted_access,
+          (select count(*) from account_applications where status = 'enabled'
+            and concat(',', protocol_capabilities, ',') like '%,sso,%'
+            and (sso_callback_url is null or trim(sso_callback_url) = '')) as missing_callbacks,
+          (select count(*) from account_users where status = 'disabled'
+            and updated_at &lt; #{disabledBefore}) as long_disabled_users
+    </select>
+
     <select id="selectExistingAccounts" resultType="string">
         select account from account_users where account in
         <foreach collection="accounts" item="account" open="(" separator="," close=")">#{account}</foreach>

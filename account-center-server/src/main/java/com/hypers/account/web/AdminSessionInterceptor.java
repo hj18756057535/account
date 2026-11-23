@@ -68,6 +68,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
 
     private boolean isConsoleApiRequest(String requestUri) {
         return "/api/session".equals(requestUri)
+                || "/api/overview".equals(requestUri)
                 || requestUri.startsWith("/api/user-imports/")
                 || "/api/users".equals(requestUri)
                 || requestUri.startsWith("/api/users/")
@@ -81,6 +82,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
         if (!"GET".equals(method)) {
             return false;
         }
+        if ("/api/overview".equals(requestUri)) return true;
         if ("/api/audit-events".equals(requestUri) || requestUri.startsWith("/api/audit-events/")) {
             return true;
         }

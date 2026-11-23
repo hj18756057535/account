@@ -15,12 +15,14 @@ public class ApiErrorWriter {
 
     private final ObjectMapper objectMapper;
     private final ApiMessages messages;
+    private final ManagementSecurityAudit securityAudit;
 
     public void write(HttpServletRequest request,
                       HttpServletResponse response,
                       int status,
                       String code,
                       String message) throws IOException {
+        if (status == 401 || status == 403) securityAudit.denied(request);
         response.setStatus(status);
         response.setCharacterEncoding("UTF-8");
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

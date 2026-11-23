@@ -14,6 +14,22 @@ import org.slf4j.MDC;
 @RequiredArgsConstructor
 public class AuditLogService {
 
+    public long countFailuresSince(java.time.Instant since) {
+        return auditLogMapper.countFailuresSince(since);
+    }
+
+    public List<AuditLog> recentFailures(java.time.Instant since) {
+        return auditLogMapper.selectRecentFailures(since);
+    }
+
+    public void securityEvent(String operatorId, String operation, boolean success) {
+        AuditLog event = new AuditLog(UUID.randomUUID().toString(), operatorId,
+                operation, "MANAGEMENT_SESSION", "management", null);
+        event.setTraceId(MDC.get(TRACE_CONTEXT_KEY));
+        event.setOutcome(success ? "success" : "failure");
+        auditLogMapper.insert(event);
+    }
+
     public static final String TRACE_CONTEXT_KEY = "account.traceId";
 
     private final AuditLogMapper auditLogMapper;

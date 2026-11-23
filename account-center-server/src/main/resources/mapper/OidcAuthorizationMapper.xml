@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hypers.account.mapper.OidcAuthorizationMapper">
+    <resultMap id="authorization" type="com.hypers.account.oidc.OidcAuthorizationRecord">
+        <id property="id" column="id"/>
+        <result property="clientId" column="client_id"/>
+        <result property="principalName" column="principal_name"/>
+        <result property="payload" column="payload"/>
+        <result property="stateHash" column="state_hash"/>
+        <result property="codeHash" column="code_hash"/>
+        <result property="accessTokenHash" column="access_token_hash"/>
+        <result property="idTokenHash" column="id_token_hash"/>
+        <result property="codeRedeemed" column="code_redeemed"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <sql id="columns">
+        id, client_id, principal_name, payload, state_hash, code_hash,
+        access_token_hash, id_token_hash, code_redeemed, created_at, updated_at
+    </sql>
+    <select id="findById" resultMap="authorization">
+        select <include refid="columns"/> from account_oidc_authorizations where id = #{id}
+    </select>
+    <select id="findByTokenHash" resultMap="authorization">
+        select <include refid="columns"/> from account_oidc_authorizations
+        <where>
+            <choose>
+                <when test="type == 'code'">code_hash = #{hash}</when>
+                <when test="type == 'access_token'">access_token_hash = #{hash}</when>
+                <when test="type == 'id_token'">id_token_hash = #{hash}</when>
+                <when test="type == 'state'">state_hash = #{hash}</when>
+                <otherwise>
+                    state_hash = #{hash} or code_hash = #{hash}
+                    or access_token_hash = #{hash} or id_token_hash = #{hash}
+                </otherwise>
+            </choose>
+        </where>
+    </select>
+    <insert id="insert">
+        insert into account_oidc_authorizations
+            (id, client_id, principal_name, payload, state_hash, code_hash, access_token_hash,
+             id_token_hash, code_redeemed, created_by, updated_by, created_at, updated_at)
+        values (#{id}, #{clientId}, #{principalName}, #{payload}, #{stateHash}, #{codeHash},
+                #{accessTokenHash}, #{idTokenHash}, #{codeRedeemed}, #{principalName}, #{principalName},
+                #{createdAt}, #{updatedAt})
+    </insert>
+    <update id="update">
+        update account_oidc_authorizations
+        set payload = #{payload}, state_hash = #{stateHash}, code_hash = #{codeHash},
+            access_token_hash = #{accessTokenHash}, id_token_hash = #{idTokenHash},
+            code_redeemed = #{codeRedeemed}, updated_by = #{principalName}, updated_at = #{updatedAt}
+        where id = #{id}
+          and (code_redeemed = false or access_token_hash = #{accessTokenHash})
+    </update>
+    <delete id="delete">delete from account_oidc_authorizations where id = #{id}</delete>
+</mapper>

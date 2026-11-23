@@ -10,6 +10,9 @@ import java.util.List;
 @Mapper
 public interface AccountUserMapper {
 
+    com.hypers.account.app.OverviewCounts selectOverviewCounts(
+            @Param("disabledBefore") java.time.Instant disabledBefore);
+
     List<String> selectExistingAccounts(@Param("accounts") List<String> accounts);
 
     void insertBatch(@Param("users") List<AccountUser> users);

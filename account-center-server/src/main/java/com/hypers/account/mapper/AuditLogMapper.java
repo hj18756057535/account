@@ -14,6 +14,10 @@ import java.util.List;
 @Mapper
 public interface AuditLogMapper {
 
+    long countFailuresSince(@Param("since") java.time.Instant since);
+
+    List<AuditLog> selectRecentFailures(@Param("since") java.time.Instant since);
+
     long countEvents(@Param("query") AuditPageQuery query);
 
     List<AuditLog> selectEvents(@Param("query") AuditPageQuery query);

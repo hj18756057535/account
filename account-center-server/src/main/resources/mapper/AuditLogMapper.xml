@@ -72,4 +72,14 @@
     <select id="selectEvent" resultMap="auditLogResultMap">
         select <include refid="eventColumns"/> from account_operation_logs where id = #{id}
     </select>
+
+    <select id="countFailuresSince" resultType="long">
+        select count(*) from account_operation_logs where outcome = 'failure' and created_at &gt;= #{since}
+    </select>
+
+    <select id="selectRecentFailures" resultMap="auditLogResultMap">
+        select <include refid="eventColumns"/> from account_operation_logs
+        where outcome = 'failure' and created_at &gt;= #{since}
+        order by created_at desc, id desc limit 10
+    </select>
 </mapper>

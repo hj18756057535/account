@@ -25,6 +25,8 @@
     </properties>
 
     <modules>
+        <module>integration-kits/java8-javax-spring-mvc</module>
+        <module>account-center-spring-boot2-starter</module>
         <module>account-center-contract</module>
         <module>account-center-server</module>
         <module>account-center-spring-boot-starter</module>

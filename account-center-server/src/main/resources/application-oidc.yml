@@ -1,0 +1,23 @@
+# 显式启用：配置测试数据库及以下环境变量后，以 oidc profile 启动。
+# 不提供示例密码、临时签名密钥或默认开放的客户端。
+server:
+  servlet:
+    session:
+      cookie:
+        secure: ${ACCOUNT_SESSION_COOKIE_SECURE:true}
+
+account:
+  oidc:
+    enabled: true
+    issuer: ${ACCOUNT_OIDC_ISSUER}
+    allow-intranet-http: ${ACCOUNT_OIDC_ALLOW_INTRANET_HTTP:false}
+    key-store: ${ACCOUNT_OIDC_KEY_STORE}
+    key-store-password: ${ACCOUNT_OIDC_KEY_STORE_PASSWORD}
+    signing-key-alias: ${ACCOUNT_OIDC_SIGNING_KEY_ALIAS}
+    code-ttl: 60s
+    access-token-ttl: 5m
+    clients:
+      agent:
+        secret-hash: ${ACCOUNT_OIDC_AGENT_SECRET_HASH}
+        post-logout-redirect-uris:
+          - ${ACCOUNT_OIDC_AGENT_POST_LOGOUT_REDIRECT_URI}

@@ -14,6 +14,26 @@ import java.util.stream.Collectors;
 public class InMemoryAccountStore implements AccountStore {
 
     @Override
+    public synchronized OverviewCounts overviewCounts(java.time.Instant disabledBefore) {
+        OverviewCounts counts = new OverviewCounts();
+        counts.setUsers(usersById.size());
+        counts.setDisabledUsers(usersById.values().stream().filter(u -> "disabled".equals(u.getStatus())).count());
+        counts.setApplications(applicationsByCode.size());
+        counts.setDisabledApplications(applicationsByCode.values().stream()
+                .filter(a -> "disabled".equals(a.getStatus())).count());
+        counts.setGrantedAccess(authorizedAppsByUserId.values().stream().mapToLong(Set::size).sum());
+        counts.setMissingCallbacks(applicationsByCode.values().stream()
+                .filter(a -> "enabled".equals(a.getStatus()))
+                .filter(a -> a.getProtocolCapabilities() != null
+                        && java.util.Arrays.asList(a.getProtocolCapabilities().split(",")).contains("sso"))
+                .filter(a -> a.getSsoCallbackUrl() == null || a.getSsoCallbackUrl().isBlank()).count());
+        counts.setLongDisabledUsers(usersById.values().stream()
+                .filter(u -> "disabled".equals(u.getStatus()) && u.getUpdatedAt() != null
+                        && u.getUpdatedAt().isBefore(disabledBefore)).count());
+        return counts;
+    }
+
+    @Override
     public synchronized List<String> findExistingAccounts(List<String> accounts) {
         var requested = new HashSet<>(accounts);
         return usersById.values().stream().map(AccountUser::getAccount).filter(requested::contains).toList();

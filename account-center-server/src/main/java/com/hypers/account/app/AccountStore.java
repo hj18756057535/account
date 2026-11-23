@@ -9,6 +9,8 @@ import java.util.List;
  */
 public interface AccountStore {
 
+    OverviewCounts overviewCounts(java.time.Instant disabledBefore);
+
     List<String> findExistingAccounts(List<String> accounts);
 
     List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId);

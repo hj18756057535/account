@@ -54,7 +54,8 @@ class AccountSchemaCommentsTest {
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
             flyway.validate();
-            var upgrade = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor).load();
+            var upgrade = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor)
+                    .target("2").load();
             assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(upgrade.info().current().getVersion().getVersion()).isEqualTo("2");
             assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
@@ -66,6 +67,15 @@ class AccountSchemaCommentsTest {
                     .hasSize(11).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
             assertThat(upgrade.migrate().migrationsExecuted).isZero();
             upgrade.validate();
+            var oidcUpgrade = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor).load();
+            assertThat(oidcUpgrade.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(oidcUpgrade.info().current().getVersion().getVersion()).isEqualTo("3");
+            assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
+            assertThat(jdbc.queryForList("select remarks from information_schema.columns "
+                    + "where table_schema = 'PUBLIC' and table_name = 'ACCOUNT_OIDC_AUTHORIZATIONS'", String.class))
+                    .hasSize(13).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
+            assertThat(oidcUpgrade.migrate().migrationsExecuted).isZero();
+            oidcUpgrade.validate();
         }
     }
 

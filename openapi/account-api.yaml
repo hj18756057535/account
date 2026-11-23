@@ -19,6 +19,35 @@ tags:
   - name: Integration
   - name: Audit
 paths:
+  /api/overview:
+    get:
+      tags: [Audit]
+      operationId: getOverview
+      security:
+        - sessionCookie: []
+      summary: 管理概览、运行摘要与确定性规则洞察
+      description: >-
+        管理员与审计员只读；所有响应 no-store。计数为采样时数据，不是跨请求事务快照。
+        准入统计 desired_status=enabled，不代表下游同步成功。失败窗口为最近24小时。
+        长期禁用为 disabled 且 updated_at 早于30天；不是连续禁用时长证明。
+        洞察可由 account.web.insights.enabled=false 关闭。下游服务不进行主动探测。
+      responses:
+        '200':
+          description: 聚合数据，最近最多10条脱敏失败事件
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          description: 数据不可读取，不返回伪造的零值
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/user-imports/template:
     get:
       tags: [Users]
@@ -1037,6 +1066,42 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    OverviewResponse:
+      type: object
+      required: [sampledAt, failuresSince, counts, recentFailures, insightsEnabled, insights, failureEvents, accountDataStatus, downstreamStatus]
+      properties:
+        sampledAt: { type: string, format: date-time }
+        failuresSince: { type: string, format: date-time }
+        counts:
+          $ref: '#/components/schemas/OverviewCounts'
+        recentFailures: { type: integer, format: int64, minimum: 0 }
+        insightsEnabled: { type: boolean }
+        insights:
+          type: array
+          items:
+            type: object
+            required: [rule, count]
+            properties:
+              rule: { type: string, enum: [missing_callbacks, long_disabled_users, repeated_failures] }
+              count: { type: integer, format: int64, minimum: 1 }
+        failureEvents:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/AuditEventResponse'
+        accountDataStatus: { type: string, enum: [available] }
+        downstreamStatus: { type: string, enum: [not_checked] }
+    OverviewCounts:
+      type: object
+      required: [users, disabledUsers, applications, disabledApplications, grantedAccess, missingCallbacks, longDisabledUsers]
+      properties:
+        users: { type: integer, format: int64, minimum: 0 }
+        disabledUsers: { type: integer, format: int64, minimum: 0 }
+        applications: { type: integer, format: int64, minimum: 0 }
+        disabledApplications: { type: integer, format: int64, minimum: 0 }
+        grantedAccess: { type: integer, format: int64, minimum: 0 }
+        missingCallbacks: { type: integer, format: int64, minimum: 0 }
+        longDisabledUsers: { type: integer, format: int64, minimum: 0 }
     UserImportPreview:
       type: object
       required: [importId, expiresAt, rowCount, valid, rows]

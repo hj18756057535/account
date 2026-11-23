@@ -39,3 +39,6 @@ flyway.conf
 
 # 本机 AI 工具适配；规范正文只提交 .agents/skills
 .claude/
+
+# 本机 OIDC 签名密钥、客户端凭据和运行配置
+/.local/

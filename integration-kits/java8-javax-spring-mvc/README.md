@@ -1,6 +1,6 @@
 # Account 菜单权限 Java 8 源码接入包
 
-本目录是 `menu_permission_v1` 的可复制源码，不是需要发布到 Nexus 的运行时依赖。适用于 Java 8、`javax.servlet`、Spring MVC 5（包括 Spring Boot 2.x）应用，并要求宿主项目启用 Lombok；线上事实源仍是 `../../openapi/account-application-api.yaml` 与 `../conformance/menu_permission_v1.json`。
+本目录维护 `menu_permission_v1` 的 Java 8 公共接入代码，同时作为 JAR 供 [Boot 2 Starter](../../account-center-spring-boot2-starter/README.md) 引用。新接入优先使用 Starter 和本地 Maven 仓库，无需 Nexus、复制源码或在宿主启用 Lombok。下面保留的源码接入步骤仅用于既有非 Boot 应用；源码方式要求宿主启用 Lombok。协议事实源仍是 `../../openapi/account-application-api.yaml` 与 `../conformance/menu_permission_v1.json`。
 
 ## 接入步骤
 

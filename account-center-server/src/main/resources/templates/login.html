@@ -22,6 +22,7 @@
 <div class="login-box">
     <h1>Account Center</h1>
     <form method="post" action="/login">
+        <input th:if="${_csrf != null}" type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         <label for="account" th:text="${page.account}"></label>
         <input id="account" name="account" type="text" required autofocus>
         <label for="password" th:text="${page.password}"></label>

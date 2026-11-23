@@ -14,6 +14,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 public class MyBatisAccountStore implements AccountStore {
 
     @Override
+    public OverviewCounts overviewCounts(java.time.Instant disabledBefore) {
+        return userMapper.selectOverviewCounts(disabledBefore);
+    }
+
+    @Override
     public List<String> findExistingAccounts(List<String> accounts) {
         return accounts.isEmpty() ? java.util.Collections.emptyList() : userMapper.selectExistingAccounts(accounts);
     }

@@ -27,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ApiExceptionHandler {
 
     private final ApiMessages messages;
+    private final ManagementSecurityAudit securityAudit;
 
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiErrorResponse> handleUploadLimit(HttpServletRequest request) {
@@ -54,6 +55,8 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiErrorResponse> handleApiException(ApiException exception,
                                                                 HttpServletRequest request) {
+        if (exception.getStatus() == HttpStatus.FORBIDDEN
+                && !"MANAGEMENT_ACCESS_DENIED".equals(exception.getCode())) securityAudit.denied(request);
         return ResponseEntity.status(exception.getStatus()).body(new ApiErrorResponse(
                 exception.getCode(),
                 messages.text(request, exception.getMessage()),
