@@ -20,7 +20,7 @@
 </dependency>
 ```
 
-Starter 自动传递已有 `com.hypers.account.integration:account-menu-permission-source-kit` JAR；保留既有坐标和包名以避免重复维护源码。它不依赖 Java 21 Contract，也不继承 Account 的 Boot 3 父 POM。宿主应统一管理其 Boot 2 依赖版本。其他电脑/CI 需各自安装同版本制品，或配置共享 Maven 制品仓库；本机安装不会自动供远程机器使用。后续更新先重新 install，再重新构建并启动消费者。
+Starter JAR 内含菜单协议、Handler 接口和签名校验实现。它不依赖 Java 21 Contract，也不继承 Account 的 Boot 3 父 POM。宿主应统一管理其 Boot 2 依赖版本。其他电脑/CI 需各自安装同版本制品，或配置共享 Maven 制品仓库；本机安装不会自动供远程机器使用。后续更新先重新 install，再重新构建并启动消费者。
 
 ## 启用
 

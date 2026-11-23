@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,31 +16,12 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-class SourceKitContractTest {
-
-    @Test
-    void manifestMatchesAllCopyableSources() throws Exception {
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode files = objectMapper.readTree(Files.readAllBytes(
-                Paths.get("SOURCE-KIT-MANIFEST.json"))).get("files");
-        int checked = 0;
-        java.util.Iterator<String> names = files.fieldNames();
-        while (names.hasNext()) {
-            String name = names.next();
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(Files.readAllBytes(Paths.get(name)));
-            StringBuilder hex = new StringBuilder();
-            for (byte value : digest) hex.append(String.format("%02x", value & 0xff));
-            assertEquals(files.get(name).asText(), hex.toString(), name);
-            checked++;
-        }
-        assertEquals(17, checked);
-    }
+class MenuPermissionContractTest {
 
     @Test
     void matchesSharedSignatureVector() throws Exception {
         JsonNode vector = new ObjectMapper().readTree(Files.readAllBytes(
-                Paths.get("..", "conformance", "menu_permission_v1.json")));
+                Paths.get("..", "integration-kits", "conformance", "menu_permission_v1.json")));
         AccountHmacSigner signer = new AccountHmacSigner();
         String signText = signer.buildSignText(
                 vector.get("method").asText(),

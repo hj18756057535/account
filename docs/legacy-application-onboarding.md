@@ -1,5 +1,7 @@
 # 老应用接入：Starter、服务鉴权与统一登录
 
+当前 Boot 2 菜单协议与自动配置统一由一个 Starter JAR 提供。新接入使用标准 OIDC 时见 [OIDC 接入指南](oidc-integration.md)，下文第四、五节记录早期自定义 ticket 方案。
+
 本说明基于 2026-09-17 Account 与 cms-ai 实际代码。菜单权限接入迁移已实施；下文 SSO 衔接是待实施设计，不能理解为 CMS 已完成统一登录。
 
 ## 一、应用要改什么
