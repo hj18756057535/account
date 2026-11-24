@@ -35,8 +35,7 @@ class SsoRedirectSecurityTest {
                 "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
-                "http://localhost:9003",
-                "secret",
+                "", "secret",
                 "default"));
         AccountUser user = directoryService.createUser(new SaveUserCommand(
                 "redirect-safe-user",

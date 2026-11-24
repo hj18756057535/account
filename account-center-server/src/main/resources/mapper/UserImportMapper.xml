@@ -16,10 +16,10 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
     <insert id="insert">
-        insert into account_user_imports
-        (id, file_hash, row_count, valid, rows_json, status, expires_at, created_by, created_at)
-        values (#{batch.id}, #{batch.fileHash}, #{batch.rowCount}, #{batch.valid}, #{batch.rowsJson},
-                #{batch.status}, #{batch.expiresAt}, #{batch.createdBy}, #{batch.createdAt})
+        insert into account_user_imports (id, file_hash, row_count, valid, rows_json, status, expires_at,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{batch.id}, #{batch.fileHash}, #{batch.rowCount}, #{batch.valid}, #{batch.rowsJson}, #{batch.status}, #{batch.expiresAt}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
     <select id="find" resultMap="batch">
         select id, file_hash, row_count, valid, rows_json, result_json, status,
@@ -30,7 +30,7 @@
     <update id="complete">
         update account_user_imports set status = 'committed', rows_json = null,
         result_json = #{batch.resultJson}, expires_at = #{batch.expiresAt},
-        updated_by = #{batch.updatedBy}, updated_at = #{batch.updatedAt}
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{batch.id} and created_by = #{batch.createdBy} and status = 'preview'
     </update>
     <select id="expiredIds" resultType="string">

@@ -15,6 +15,8 @@ public interface AccountUserMapper {
 
     List<String> selectExistingAccounts(@Param("accounts") List<String> accounts);
 
+    List<AccountUser> selectByAccountsOrIds(@Param("accounts") List<String> accounts, @Param("ids") List<String> ids);
+
     void insertBatch(@Param("users") List<AccountUser> users);
 
     void insert(@Param("user") AccountUser user);

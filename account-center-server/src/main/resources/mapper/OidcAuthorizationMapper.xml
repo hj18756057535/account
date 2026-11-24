@@ -37,18 +37,17 @@
         </where>
     </select>
     <insert id="insert">
-        insert into account_oidc_authorizations
-            (id, client_id, principal_name, payload, state_hash, code_hash, access_token_hash,
-             id_token_hash, code_redeemed, created_by, updated_by, created_at, updated_at)
-        values (#{id}, #{clientId}, #{principalName}, #{payload}, #{stateHash}, #{codeHash},
-                #{accessTokenHash}, #{idTokenHash}, #{codeRedeemed}, #{principalName}, #{principalName},
-                #{createdAt}, #{updatedAt})
+        insert into account_oidc_authorizations (id, client_id, principal_name, payload, state_hash, code_hash, access_token_hash, id_token_hash, code_redeemed,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{id}, #{clientId}, #{principalName}, #{payload}, #{stateHash}, #{codeHash}, #{accessTokenHash}, #{idTokenHash}, #{codeRedeemed}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
     <update id="update">
         update account_oidc_authorizations
         set payload = #{payload}, state_hash = #{stateHash}, code_hash = #{codeHash},
             access_token_hash = #{accessTokenHash}, id_token_hash = #{idTokenHash},
-            code_redeemed = #{codeRedeemed}, updated_by = #{principalName}, updated_at = #{updatedAt}
+            code_redeemed = #{codeRedeemed},
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{id}
           and (code_redeemed = false or access_token_hash = #{accessTokenHash})
     </update>

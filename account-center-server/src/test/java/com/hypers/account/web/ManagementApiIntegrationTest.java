@@ -157,7 +157,8 @@ class ManagementApiIntegrationTest {
                 .andExpect(jsonPath("$.total").isNumber())
                 .andExpect(jsonPath("$.items[0].account").value("alpha-user"))
                 .andExpect(jsonPath("$.items[0].password").doesNotExist())
-                .andExpect(jsonPath("$.items[0].createdBy").doesNotExist());
+                .andExpect(jsonPath("$.items[0].createdBy").value("system"))
+                .andExpect(jsonPath("$.items[0].updatedBy").value("system"));
 
         mockMvc.perform(get("/api/users/" + alpha.getId())
                         .sessionAttr(AuthController.SESSION_USER_KEY,

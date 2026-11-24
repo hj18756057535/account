@@ -20,7 +20,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class OidcSetupTest {
     @TempDir Path temporary;
@@ -52,8 +51,7 @@ class OidcSetupTest {
         assertThat(server.getProperty("account.oidc.key-store-password")
                 .equals(firstProperties.getProperty("account.oidc.key-store-password"))).isTrue();
         assertThat(MessageDigest.isEqual(signingKey, Files.readAllBytes(directory.resolve("signing.p12")))).isTrue();
-        assertThat(new BCryptPasswordEncoder().matches(changed.path("client_secret").asText(),
-                server.getProperty("account.oidc.clients.agent.secret-hash").substring("{bcrypt}".length()))).isTrue();
+        assertThat(server.stringPropertyNames()).noneMatch(key -> key.endsWith("secret-hash"));
 
         var source = new MapConfigurationPropertySource();
         server.forEach((key, value) -> source.put((String) key, value));
@@ -63,6 +61,9 @@ class OidcSetupTest {
         app.setAppCode("agent");
         app.setName("Agent");
         app.setStatus("enabled");
+        app.setSecretState("active");
+        app.setSecret(changed.path("client_secret").asText());
+        app.setNotifyBaseUrl("");
         app.setSsoCallbackUrl(changed.path("redirect_uri").asText());
         when(store.requireApplication("agent")).thenReturn(app);
         var repository = new OidcConfiguration().oidcClients(store, bound);
@@ -72,7 +73,7 @@ class OidcSetupTest {
         try (var validator = Validation.buildDefaultValidatorFactory()) {
             assertThat(validator.getValidator().validate(registration)).isEmpty();
         }
-        assertThat(registration.getProtocolCapabilities()).containsExactly("sso");
+        assertThat(registration.getSsoCallbackUrl()).isEqualTo(app.getSsoCallbackUrl());
 
         OidcSetup.prepare(directory, "https://10.20.30.40", "https://192.168.10.20", "");
         assertThat(properties(directory).getProperty("account.oidc.allow-intranet-http")).isEqualTo("false");

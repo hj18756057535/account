@@ -1,7 +1,6 @@
 package com.hypers.account.oidc;
 
 import com.hypers.account.app.AccountStore;
-import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -13,8 +12,7 @@ public class OidcAccessPolicy {
     public boolean allows(String userId, String appCode) {
         try {
             var application = store.requireApplication(appCode);
-            boolean provisionedUsers = application.isManagedSync()
-                    && Arrays.asList(application.getProtocolCapabilities().split(",")).contains("user_sync");
+            boolean provisionedUsers = application.hasProviderConfiguration();
             return "enabled".equals(store.requireUser(userId).getStatus())
                     && "enabled".equals(application.getStatus())
                     && (provisionedUsers ? store.isAuthorized(userId, appCode)

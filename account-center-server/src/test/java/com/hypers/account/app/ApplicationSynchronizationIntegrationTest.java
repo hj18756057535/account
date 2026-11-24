@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.config.ApplicationSyncProperties;
+import com.hypers.account.app.directory.ApplicationUserLink;
+import com.hypers.account.app.directory.DirectoryImportStore;
 import com.hypers.account.app.http.ManagedApplicationSyncTransport;
 import com.hypers.account.contract.application.AccountUserSyncResult;
 import com.hypers.account.security.HmacSignatureService;
@@ -30,6 +32,7 @@ import java.net.URI;
 import java.net.InetSocketAddress;
 import java.time.Clock;
 import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +70,7 @@ class ApplicationSynchronizationIntegrationTest {
     @Autowired private ApplicationSyncPolicy policy;
     @Autowired private SsoTicketService tickets;
     @Autowired private SsoTicketController ticketController;
+    @Autowired private DirectoryImportStore directoryImports;
     @MockitoBean private ApplicationSyncTransport transport;
     private String userId;
     private String appCode;
@@ -78,9 +82,9 @@ class ApplicationSynchronizationIntegrationTest {
                 "Synthetic", "001"), "admin-user").getId();
         directory.createManagedApplication(new SaveApplicationCommand(appCode, "Synthetic",
                 "https://example.invalid", "https://example.invalid/callback", "https://example.invalid/permissions",
-                "https://example.invalid", "default", "sso,user_sync", "synthetic-secret", 0), "admin-user");
+                "https://example.invalid", "default", "synthetic-secret", 0), "admin-user");
         properties.setEnabled(true);
-        properties.getTargets().put(appCode, URI.create("https://example.invalid"));
+
         doAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             return result(call.getArgument(0), "local-" + userId);
@@ -88,7 +92,60 @@ class ApplicationSynchronizationIntegrationTest {
     }
 
     @AfterEach
-    void stopDelivery() { properties.setEnabled(false); properties.getTargets().clear(); }
+    void stopDelivery() { properties.setEnabled(false); }
+
+    @Test
+    void addingTheBackendConfigurationAllowsExplicitSynchronizationOfAnExistingGrant() {
+        jdbc.update("update account_applications set notify_base_url = '' where app_code = ?", appCode);
+        ApplicationAccess granted = change("enabled", 0, false);
+        assertThat(granted.getIntegrationStatus()).isEqualTo("not_required");
+        assertThat(store.latest(userId, appCode, 1)).isNull();
+
+        jdbc.update("update account_applications set notify_base_url = ?, version = version + 1 where app_code = ?",
+                "https://example.invalid", appCode);
+        ApplicationAccess current = directory.getUserApplicationAccess(userId, appCode);
+        service.decorate(current, directory.getApplication(appCode));
+        assertThat(current.isRetryable()).isTrue();
+        ApplicationAccess scheduled = service.retry(userId, appCode, current.getVersion(), "admin-user");
+        assertThat(scheduled.getVersion()).isEqualTo(2);
+        assertThat(scheduled.getIntegrationStatus()).isEqualTo("pending");
+        assertThat(store.latest(userId, appCode, 2)).isNotNull();
+    }
+
+    @Test
+    void importedLocalIdentityIsSentAndConfirmedWithoutReplacingItsId() throws Exception {
+        addSourceLink();
+        doAnswer(call -> result(call.getArgument(0), "9007199254740993")).when(transport).send(any(), any());
+        var access = change("enabled", 0, false);
+        assertThat(json.readTree(store.find(access.getSyncCommandId()).getPayloadJson()).path("localUserId").asText())
+                .isEqualTo("9007199254740993");
+        service.process(access.getSyncCommandId());
+        assertThat(store.state(userId, appCode).getLocalUserId()).isEqualTo("9007199254740993");
+        assertThat(directory.isAuthorized(userId, appCode)).isTrue();
+    }
+
+    @Test
+    void receiptCannotReplaceAnImportedLocalIdentity() {
+        addSourceLink();
+        var access = change("enabled", 0, false);
+        service.process(access.getSyncCommandId());
+        var conflicted = store.find(access.getSyncCommandId());
+        assertThat(conflicted.getErrorCode()).as("status=%s attempts=%s", conflicted.getStatus(), conflicted.getAttempts())
+                .isEqualTo("SYNC_IDENTITY_CONFLICT");
+        assertThat(store.state(userId, appCode)).isNull();
+        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+    }
+
+    private void addSourceLink() {
+        ApplicationUserLink link = new ApplicationUserLink();
+        link.setAppCode(appCode);
+        link.setUserId(userId);
+        link.setLocalUserId("9007199254740993");
+        link.setTenantCode("default");
+        link.setCreatedAt(Clock.systemUTC().instant());
+        link.setCreatedBy("admin-user");
+        directoryImports.insertLinks(List.of(link));
+    }
 
     @Test
     void deliversToSyntheticHttpProviderAndPersistsConfirmation() throws Exception {
@@ -107,7 +164,7 @@ class ApplicationSynchronizationIntegrationTest {
         server.start();
         try {
             var base = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
-            properties.getTargets().put(appCode, base);
+
             jdbc.update("update account_applications set notify_base_url = ? where app_code = ?", base.toString(), appCode);
             var http = new ManagedApplicationSyncTransport(policy, json, new HmacSignatureService(), Clock.systemUTC());
             doAnswer(call -> http.send(call.getArgument(0), call.getArgument(1))).when(transport).send(any(), any());
@@ -150,7 +207,7 @@ class ApplicationSynchronizationIntegrationTest {
         properties.setEnabled(false);
         var disabled = change("disabled", 1, false);
         assertThat(disabled.getAppliedVersion()).isEqualTo(1);
-        assertThat(directory.getApplication(appCode).isManagedSync()).isTrue();
+
         assertThat(directory.isAuthorized(userId, appCode)).isFalse();
         assertThatThrownBy(() -> change("enabled", 2, false)).isInstanceOf(ApiException.class);
         var enabled = change("enabled", 2, true);
@@ -241,12 +298,17 @@ class ApplicationSynchronizationIntegrationTest {
     @Test
     void rejectsCrossUserLocalIdentityAndChangedTarget() {
         doAnswer(call -> result(call.getArgument(0), "shared-local")).when(transport).send(any(), any());
-        service.process(change("enabled", 0, false).getSyncCommandId());
+        var first = change("enabled", 0, false);
+        service.process(first.getSyncCommandId());
+        assertThat(store.find(first.getSyncCommandId()).getStatus()).as("first identity confirmation").isEqualTo("succeeded");
         String other = directory.createManagedUser(new SaveUserCommand(appCode + "-other", "other@example.invalid",
                 "Other", "002"), "admin-user").getId();
         var access = writes.changeAccess(other, appCode, "enabled", 0, "synthetic", "admin-user");
         service.process(access.getSyncCommandId());
-        assertThat(store.find(access.getSyncCommandId()).getErrorCode()).isEqualTo("SYNC_IDENTITY_CONFLICT");
+        var conflict = store.find(access.getSyncCommandId());
+        assertThat(conflict.getErrorCode()).as("status=%s attempts=%s retry=%s now=%s", conflict.getStatus(),
+                        conflict.getAttempts(), conflict.getNextRetryAt(), Clock.systemUTC().instant())
+                .isEqualTo("SYNC_IDENTITY_CONFLICT");
         assertThat(store.state(other, appCode)).isNull();
         var disabled = change("disabled", 1, false);
         jdbc.update("update account_applications set version = version + 1 where app_code = ?", appCode);

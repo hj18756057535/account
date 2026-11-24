@@ -43,9 +43,8 @@
     </resultMap>
     <sql id="columns">id, idempotency_key, user_id, app_code, desired_status, sync_version, status, attempts, next_retry_at, error_code, trace_id, created_at, updated_at, payload_json, payload_hash, operator_id, target_application_version, lease_token, lease_expires_at</sql>
     <select id="lockApplication" resultType="java.lang.Boolean">
-        select managed_sync from account_applications where app_code = #{appCode} for update
+        select true from account_applications where app_code = #{appCode} for update
     </select>
-    <update id="enroll">update account_applications set managed_sync = true where app_code = #{appCode}</update>
     <select id="lockAccess" resultMap="access">
         select user_id, app_code, desired_status, version, updated_at
         from account_user_applications where user_id = #{userId} and app_code = #{appCode} for update
@@ -67,13 +66,13 @@
             attempts = #{delivery.attempts},
             next_retry_at = #{delivery.nextRetryAt},
             error_code = #{delivery.errorCode},
-            updated_at = #{delivery.updatedAt},
             payload_json = #{delivery.payloadJson},
             payload_hash = #{delivery.payloadHash},
             operator_id = #{delivery.operatorId},
             target_application_version = #{delivery.targetApplicationVersion},
             lease_token = #{delivery.leaseToken},
-            lease_expires_at = #{delivery.leaseExpiresAt}
+            lease_expires_at = #{delivery.leaseExpiresAt},
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{delivery.id}
     </update>
     <select id="due" resultType="string">
@@ -90,7 +89,8 @@
     </select>
     <update id="supersede">
         update account_sync_commands set status = 'superseded', payload_json = null,
-            lease_token = null, lease_expires_at = null, next_retry_at = null, updated_at = #{now}
+            lease_token = null, lease_expires_at = null, next_retry_at = null,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where user_id = #{userId} and app_code = #{appCode} and sync_version &lt; #{version}
           and status not in ('succeeded', 'superseded', 'expired')
     </update>
@@ -99,13 +99,15 @@
         from account_application_user_states where user_id = #{userId} and app_code = #{appCode}
     </select>
     <insert id="insertState">
-        insert into account_application_user_states (user_id, app_code, local_user_id, applied_status, applied_version, last_synced_at, created_by, updated_by, created_at, updated_at)
-        values (#{state.userId}, #{state.appCode}, #{state.localUserId}, #{state.appliedStatus}, #{state.appliedVersion}, #{state.lastSyncedAt}, #{state.createdBy}, #{state.updatedBy}, #{state.createdAt}, #{state.updatedAt})
+        insert into account_application_user_states (user_id, app_code, local_user_id, applied_status, applied_version, last_synced_at,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{state.userId}, #{state.appCode}, #{state.localUserId}, #{state.appliedStatus}, #{state.appliedVersion}, #{state.lastSyncedAt}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
     <update id="updateState">
         update account_application_user_states set applied_status = #{state.appliedStatus},
             applied_version = #{state.appliedVersion}, last_synced_at = #{state.lastSyncedAt},
-            updated_by = #{state.updatedBy}, updated_at = #{state.updatedAt}
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where user_id = #{state.userId} and app_code = #{state.appCode}
     </update>
 </mapper>

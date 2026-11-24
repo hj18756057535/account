@@ -6,6 +6,7 @@ import com.hypers.account.mapper.AccountUserMapper;
 import com.hypers.account.mapper.SyncCommandMapper;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -25,11 +26,25 @@ public class MyBatisAccountStore implements AccountStore {
 
     @Override
     public List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId) {
+        return saveNewUsers(commands, java.util.Collections.emptySet(), operatorId);
+    }
+
+    @Override
+    public List<AccountUser> findUsersByAccountsOrIds(List<String> accounts, List<String> ids) {
+        return accounts.isEmpty() && ids.isEmpty() ? java.util.Collections.emptyList()
+                : userMapper.selectByAccountsOrIds(accounts, ids);
+    }
+
+    @Override
+    public List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, Set<String> disabledAccounts, String operatorId) {
         if (commands.isEmpty()) return java.util.Collections.emptyList();
         List<AccountUser> users = commands.stream().map(command -> {
             AccountUser user = new AccountUser(UUID.randomUUID().toString().replace("-", ""),
                     command.getAccount(), command.getEmail(), command.getName(), command.getPhone());
             user.setCreatedBy(operatorId);
+            if (disabledAccounts.contains(command.getAccount())) {
+                user.setStatus("disabled");
+            }
             return user;
         }).toList();
         try {
@@ -140,7 +155,7 @@ public class MyBatisAccountStore implements AccountStore {
                 command.getNotifyBaseUrl(),
                 command.getSecret(),
                 normalizeTenant(command.getDefaultTenantCode()));
-        app.setProtocolCapabilities(command.getProtocolCapabilities());
+
         app.setCreatedBy(operatorId);
         try {
             applicationMapper.insert(app);
@@ -156,7 +171,7 @@ public class MyBatisAccountStore implements AccountStore {
         SaveApplicationCommand normalized = new SaveApplicationCommand(
                 command.getAppCode(), command.getName(), command.getEntryUrl(), command.getSsoCallbackUrl(),
                 command.getPermissionIframeUrl(), command.getNotifyBaseUrl(),
-                normalizeTenant(command.getDefaultTenantCode()), command.getProtocolCapabilities(),
+                normalizeTenant(command.getDefaultTenantCode()),
                 null, command.getExpectedVersion());
         if (applicationMapper.updateManaged(normalized, operatorId) == 0) {
             throw new ResourceVersionConflictException();

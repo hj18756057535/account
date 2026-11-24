@@ -5,7 +5,6 @@ import java.util.List;
 
 public interface ApplicationSyncStore {
     Boolean lockApplication(String appCode);
-    void enroll(String appCode);
     ApplicationAccess lockAccess(String userId, String appCode);
     ApplicationSyncDelivery find(String id);
     ApplicationSyncDelivery lock(String id);

@@ -13,8 +13,6 @@ public class MyBatisApplicationSyncStore implements ApplicationSyncStore {
     @Override
     public Boolean lockApplication(String appCode) { return mapper.lockApplication(appCode); }
     @Override
-    public void enroll(String appCode) { mapper.enroll(appCode); }
-    @Override
     public ApplicationAccess lockAccess(String userId, String appCode) { return mapper.lockAccess(userId, appCode); }
     @Override
     public ApplicationSyncDelivery find(String id) { return mapper.find(id); }

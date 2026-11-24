@@ -50,7 +50,7 @@ class HttpApplicationMenuPermissionClientTest {
         server.start();
         String base = "http://127.0.0.1:" + server.getAddress().getPort();
         ApplicationSyncProperties properties = new ApplicationSyncProperties();
-        properties.getTargets().put("app-1", URI.create(base));
+
         MockEnvironment environment = new MockEnvironment().withProperty("account.store.type", "mybatis");
         environment.setActiveProfiles("test");
         client = new HttpApplicationMenuPermissionClient(
@@ -59,7 +59,7 @@ class HttpApplicationMenuPermissionClientTest {
                 base + "/permissions", base, SECRET, "default");
         application.setStatus("enabled");
         application.setSecretState("active");
-        application.setProtocolCapabilities("user_sync,menu_permission_v1");
+
     }
 
     @AfterEach

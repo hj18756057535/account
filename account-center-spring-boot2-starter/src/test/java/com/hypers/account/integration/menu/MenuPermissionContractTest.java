@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hypers.account.integration.menu.security.AccountHmacSigner;
+import com.hypers.account.integration.menu.security.AccountMenuPermissionSignatureFilter;
+import com.hypers.account.integration.menu.security.InMemoryAccountNonceStore;
+import com.hypers.account.integration.menu.web.AccountMenuPermissionController;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;

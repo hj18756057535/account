@@ -24,7 +24,7 @@ class ManagementOverviewServiceTest {
         var audit = mock(AuditLogService.class);
         var now = Instant.parse("2026-10-16T00:00:00Z");
         var counts = new OverviewCounts();
-        counts.setMissingCallbacks(2);
+        counts.setLongDisabledUsers(2);
         when(store.overviewCounts(now.minusSeconds(30 * 86400L))).thenReturn(counts);
         when(audit.countFailuresSince(now.minusSeconds(86400))).thenReturn(3L);
         when(audit.recentFailures(any())).thenReturn(List.of());

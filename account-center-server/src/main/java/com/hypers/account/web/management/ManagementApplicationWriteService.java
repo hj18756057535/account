@@ -35,7 +35,7 @@ public class ManagementApplicationWriteService {
         try {
             AccountApplication application = directoryService.createManagedApplication(withSecret, operatorId);
             auditLogService.log(operatorId, "APPLICATION_CREATED", "APPLICATION", application.getAppCode(),
-                    "{\"fields\":[\"name\",\"urls\",\"protocolCapabilities\"]}");
+                    "{\"fields\":[\"name\",\"urls\"]}");
             return new CreatedApplication(application, secret);
         } catch (ApplicationAlreadyExistsException exception) {
             throw new ApiException(HttpStatus.CONFLICT,
@@ -50,7 +50,7 @@ public class ManagementApplicationWriteService {
         try {
             AccountApplication application = directoryService.updateManagedApplication(command, operatorId);
             auditLogService.log(operatorId, "APPLICATION_UPDATED", "APPLICATION", application.getAppCode(),
-                    "{\"fields\":[\"name\",\"urls\",\"protocolCapabilities\"]}");
+                    "{\"fields\":[\"name\",\"urls\"]}");
             return application;
         } catch (ResourceVersionConflictException exception) {
             throw versionConflict();
@@ -154,7 +154,9 @@ public class ManagementApplicationWriteService {
         try {
             ApplicationAccess access = directoryService.changeUserApplicationAccess(
                     userId, appCode, desiredStatus, expectedVersion, operatorId, syncCommand);
-            access.setIntegrationStatus(synchronizationService.created(commandId, operatorId));
+            if (access.getSyncCommandId() != null) {
+                access.setIntegrationStatus(synchronizationService.created(commandId, operatorId));
+            }
             synchronizationService.populateConfirmation(access);
             synchronizationService.decorate(access, directoryService.getApplication(appCode));
             auditLogService.log(operatorId, "APPLICATION_ACCESS_CHANGED", "USER_APPLICATION",
@@ -177,8 +179,7 @@ public class ManagementApplicationWriteService {
     private SaveApplicationCommand withSecret(SaveApplicationCommand command, String secret) {
         return new SaveApplicationCommand(
                 command.getAppCode(), command.getName(), command.getEntryUrl(), command.getSsoCallbackUrl(),
-                command.getPermissionIframeUrl(), command.getNotifyBaseUrl(), command.getDefaultTenantCode(),
-                command.getProtocolCapabilities(), secret, command.getExpectedVersion());
+                command.getPermissionIframeUrl(), command.getNotifyBaseUrl(), command.getDefaultTenantCode(), secret, command.getExpectedVersion());
     }
 
     private String generateSecret() {

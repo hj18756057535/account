@@ -12,6 +12,5 @@ public class OverviewCounts {
     private long applications;
     private long disabledApplications;
     private long grantedAccess;
-    private long missingCallbacks;
     private long longDisabledUsers;
 }

@@ -162,30 +162,23 @@ class ManagementApplicationIntegrationTest {
     }
 
     @Test
-    void protocolCapabilitiesRejectNullAndDuplicateValues() throws Exception {
+    void registrationAllowsUnconfiguredFeatures() throws Exception {
         ManagementSession management = managementSession(adminSession());
-        for (String protocols : new String[] {"[null]", "[\"sso\",\"sso\"]", "[]", "[\"unknown\"]"}) {
-            ObjectNode body = (ObjectNode) objectMapper.readTree(
-                    applicationBody("invalid-protocol", "https://example.com/callback"));
-            body.set("protocolCapabilities", objectMapper.readTree(protocols));
-            mockMvc.perform(post("/api/applications")
-                            .session(management.session())
-                            .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
-                            .header("Idempotency-Key", "invalid-protocol")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(body)))
-                    .andExpect(status().isUnprocessableEntity())
-                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-        }
+        mockMvc.perform(post("/api/applications").session(management.session())
+                        .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
+                        .header("Idempotency-Key", "unconfigured-app")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"appCode\":\"unconfigured-app\",\"name\":\"Unconfigured\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.application.protocolCapabilities").isEmpty())
+                .andExpect(jsonPath("$.application.notifyBaseUrl").value(""));
     }
 
     @Test
-    void registrationAcceptsMenuPermissionCapability() throws Exception {
+    void registrationDerivesProviderFeaturesFromTheBackendAddress() throws Exception {
         ManagementSession management = managementSession(adminSession());
         ObjectNode body = (ObjectNode) objectMapper.readTree(
                 applicationBody("menu-provider", "https://example.com/callback"));
-        body.set("protocolCapabilities", objectMapper.readTree(
-                "[\"sso\",\"admin_ticket\",\"user_sync\",\"menu_permission_v1\"]"));
 
         mockMvc.perform(post("/api/applications")
                         .session(management.session())
@@ -204,13 +197,13 @@ class ManagementApplicationIntegrationTest {
         SaveApplicationCommand command = new SaveApplicationCommand(
                 "safe-app", "应用", "https://example.com", "https://example.com/callback",
                 "https://example.com/permissions", "https://example.com/notify",
-                "default", "sso", secret, 0);
+                "default", secret, 0);
         assertThat(command.toString()).doesNotContain(secret);
         assertThat(new CreatedApplication(null, secret).toString()).doesNotContain(secret);
     }
 
     @Test
-    void accessChangeIsPendingAdaptationIdempotentAndBlockedForDisabledApplications() throws Exception {
+    void configuredAccessChangeIsPendingUntilConfirmedAndBlockedForDisabledApplications() throws Exception {
         ManagementSession management = managementSession(adminSession());
         createApplication(management, "access-app", "access-app-create");
         AccountUser user = directoryService.createUser(new SaveUserCommand(
@@ -223,7 +216,7 @@ class ManagementApplicationIntegrationTest {
                 .andExpect(jsonPath("$[0].desiredStatus").value("disabled"))
                 .andExpect(jsonPath("$[0].version").value(0))
                 .andExpect(jsonPath("$[0].integrationStatus")
-                        .value("pending_application_adaptation"));
+                        .value("not_authorized"));
 
         MvcResult changed = mockMvc.perform(put("/api/users/" + user.getId()
                                 + "/application-access/access-app")
@@ -231,28 +224,27 @@ class ManagementApplicationIntegrationTest {
                         .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
                         .header("Idempotency-Key", "access-enable")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"enabled\",\"version\":0,\"reason\":\"开通业务访问\"}"))
+                        .content("{\"status\":\"enabled\",\"version\":0}"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.desiredStatus").value("enabled"))
                 .andExpect(jsonPath("$.version").value(1))
                 .andExpect(jsonPath("$.integrationStatus")
-                        .value("pending_application_adaptation"))
+                        .value("pending"))
                 .andExpect(jsonPath("$.syncCommandId").isNotEmpty())
                 .andReturn();
         String syncCommandId = read(changed, "syncCommandId");
 
-        mockMvc.perform(get("/api/users/" + user.getId() + "/applications")
+        mockMvc.perform(get("/api/users/" + user.getId() + "/application-access")
                         .session(management.session()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].appCode").value("access-app"))
-                .andExpect(jsonPath("$[0].secret").doesNotExist());
+                .andExpect(jsonPath("$[0].integrationStatus").value("pending"));
 
         mockMvc.perform(put("/api/users/" + user.getId() + "/application-access/access-app")
                         .session(management.session())
                         .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
                         .header("Idempotency-Key", "access-missing-version")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"disabled\",\"reason\":\"缺少版本\"}"))
+                        .content("{\"status\":\"disabled\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 
@@ -261,7 +253,7 @@ class ManagementApplicationIntegrationTest {
                         .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
                         .header("Idempotency-Key", "access-enable")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"enabled\",\"version\":0,\"reason\":\"开通业务访问\"}"))
+                        .content("{\"status\":\"enabled\",\"version\":0}"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.syncCommandId").value(syncCommandId));
 
@@ -281,7 +273,7 @@ class ManagementApplicationIntegrationTest {
                         .header(CsrfTokenManager.HEADER_NAME, management.csrfToken())
                         .header("Idempotency-Key", "blocked-access-enable")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"enabled\",\"version\":0,\"reason\":\"不应成功\"}"))
+                        .content("{\"status\":\"enabled\",\"version\":0}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("APPLICATION_DISABLED"));
 
@@ -295,9 +287,51 @@ class ManagementApplicationIntegrationTest {
                         .header(CsrfTokenManager.HEADER_NAME, auditSession.csrfToken())
                         .header("Idempotency-Key", "auditor-access-write")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"disabled\",\"version\":1,\"reason\":\"只读角色\"}"))
+                        .content("{\"status\":\"disabled\",\"version\":1}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void pureSsoAccessDoesNotWaitForUserSynchronization() throws Exception {
+        directoryService.createManagedApplication(new SaveApplicationCommand("sso-only", "SSO",
+                "http://localhost:8850", "http://localhost:8850/callback", "", "", "default", "synthetic-secret", 0), "admin-user");
+        AccountUser user = directoryService.createUser(new SaveUserCommand("sso-user", "", "SSO user", ""));
+        ManagementSession admin = managementSession(adminSession());
+        mockMvc.perform(put("/api/users/{userId}/application-access/sso-only", user.getId())
+                        .session(admin.session()).header(CsrfTokenManager.HEADER_NAME, admin.csrfToken())
+                        .header("Idempotency-Key", "sso-only-enable").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"enabled\",\"version\":0}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.integrationStatus").value("not_required"));
+        assertThat(jdbcTemplate.queryForObject("select count(*) from account_sync_commands where user_id = ? and app_code = ?",
+                Integer.class, user.getId(), "sso-only")).isZero();
+        assertThat(directoryService.getUserAuthorizedApplications(user.getId()))
+                .extracting("appCode").contains("sso-only");
+        mockMvc.perform(put("/api/users/{userId}/application-access/sso-only", user.getId())
+                        .session(admin.session()).header(CsrfTokenManager.HEADER_NAME, admin.csrfToken())
+                        .header("Idempotency-Key", "sso-only-disable").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"disabled\",\"version\":1}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.desiredStatus").value("disabled"));
+        assertThat(directoryService.isAuthorized(user.getId(), "sso-only")).isFalse();
+    }
+
+    @Test
+    void directoryWritesRequireAdministratorSessionAndCsrfBeforeCallingAProvider() throws Exception {
+        ManagementSession admin = managementSession(adminSession());
+        AccountUser auditor = directoryService.createUser(new SaveUserCommand("directory-auditor", "", "Auditor", ""));
+        adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
+        ManagementSession audit = managementSession(new AccountSessionUser(auditor.getId(), auditor.getAccount(), auditor.getName()));
+        for (String suffix : new String[] {"connection-check", "directory-imports", "directory-imports/fixture/commit"}) {
+            String path = "/api/applications/cms-ai/" + suffix;
+            mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
+            mockMvc.perform(post(path).session(admin.session())).andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("CSRF_INVALID"));
+            mockMvc.perform(post(path).session(audit.session())
+                            .header(CsrfTokenManager.HEADER_NAME, audit.csrfToken()))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+        }
     }
 
     @Test
@@ -344,8 +378,7 @@ class ManagementApplicationIntegrationTest {
                 + "\"ssoCallbackUrl\":\"" + callbackUrl + "\","
                 + "\"permissionIframeUrl\":\"http://localhost:9100/permissions\","
                 + "\"notifyBaseUrl\":\"http://localhost:9100/notify\","
-                + "\"defaultTenantCode\":\"default\","
-                + "\"protocolCapabilities\":[\"sso\",\"admin_ticket\",\"user_sync\"]}";
+                + "\"defaultTenantCode\":\"default\"}";
     }
 
     private String updateBody(long version) {
@@ -354,7 +387,7 @@ class ManagementApplicationIntegrationTest {
                 + "\"permissionIframeUrl\":\"http://localhost:9100/permissions\","
                 + "\"notifyBaseUrl\":\"http://localhost:9100/notify\","
                 + "\"defaultTenantCode\":\"default\","
-                + "\"protocolCapabilities\":[\"sso\"],\"version\":" + version + "}";
+                + "\"version\":" + version + "}";
     }
 
     private ManagementSession managementSession(AccountSessionUser user) throws Exception {

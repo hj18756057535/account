@@ -31,5 +31,17 @@ account:
     enabled: true
   store:
     type: mybatis
-  sync:
-    type: http
+  # CMS 本机 OIDC 联调样例，绑定到 OidcProperties。
+  # 填好签名文件配置后，将 enabled 改为 true；应用凭据由管理页面维护。
+  oidc:
+    enabled: true
+    issuer: http://localhost:8088
+    allow-intranet-http: false
+    # 从 account 后端仓库根目录启动，可复用本机已生成的签名文件。
+    key-store: file:./.local/oidc/signing.p12
+    key-store-password: "HZCCf5-JMPa-ZX1WtqMpyMCe9ZJEE_vVWiPRriEtSgg"
+    signing-key-alias: account-signing
+    code-ttl: 60s
+    access-token-ttl: 5m
+    # 客户端摘要保留完整的 {bcrypt} 前缀；CMS bootstrap 填写对应密钥的原始值。
+    # 应用与 Secret 统一由管理页面登记，无需在此配置 clients。

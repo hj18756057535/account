@@ -28,8 +28,12 @@ public class ApiMessages {
             try {
                 for (Locale.LanguageRange range : Locale.LanguageRange.parse(header)) {
                     if (range.getWeight() == 0) continue;
-                    String language = range.getRange().split("-", 2)[0];
+                    String tag = range.getRange();
+                    String language = tag.split("-", 2)[0];
                     if ("en".equals(language)) return Locale.US;
+                    if ("vi".equals(language)) return Locale.forLanguageTag("vi-VN");
+                    if ("zh-tw".equals(tag) || "zh-hk".equals(tag) || tag.startsWith("zh-hant"))
+                        return Locale.TRADITIONAL_CHINESE;
                     if ("zh".equals(language) || "*".equals(language)) return Locale.SIMPLIFIED_CHINESE;
                 }
             } catch (IllegalArgumentException ignored) {

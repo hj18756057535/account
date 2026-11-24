@@ -5,7 +5,6 @@ import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration
 public class AdminTicketSecurityConfiguration {
@@ -14,8 +13,7 @@ public class AdminTicketSecurityConfiguration {
     @Primary
     public AdminTicketService safeAdminTicketService(
             AdminTicketMapper ticketMapper,
-            Clock clock,
-            JdbcTemplate jdbcTemplate) {
-        return new SafeAdminTicketService(ticketMapper, clock, jdbcTemplate);
+            Clock clock) {
+        return new SafeAdminTicketService(ticketMapper, clock);
     }
 }

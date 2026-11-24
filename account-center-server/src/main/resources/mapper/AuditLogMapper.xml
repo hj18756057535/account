@@ -18,8 +18,10 @@
 
     <!-- 新增审计日志 -->
     <insert id="insert">
-        insert into account_operation_logs (id, operator_id, operation_type, target_type, target_id, detail, trace_id, outcome)
-        values (#{log.id}, #{log.operatorId}, #{log.operationType}, #{log.targetType}, #{log.targetId}, #{log.detail}, #{log.traceId}, #{log.outcome})
+        insert into account_operation_logs (id, operator_id, operation_type, target_type, target_id, detail, trace_id, outcome,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{log.id}, #{log.operatorId}, #{log.operationType}, #{log.targetType}, #{log.targetId}, #{log.detail}, #{log.traceId}, #{log.outcome}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
 
     <!-- 按条件搜索审计日志，按时间倒序 -->

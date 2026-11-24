@@ -63,7 +63,6 @@ public class OidcConfiguration {
     @Bean
     public OidcClientRepository oidcClients(AccountStore store, OidcProperties properties) {
         OidcUrlPolicy.validateIssuer(properties.getIssuer(), properties.isAllowIntranetHttp());
-        if (properties.getClients().isEmpty()) throw new IllegalArgumentException("OIDC clients are required");
         if (properties.getCodeTtl().compareTo(Duration.ofSeconds(30)) < 0
                 || properties.getCodeTtl().compareTo(Duration.ofSeconds(120)) > 0
                 || properties.getAccessTokenTtl().compareTo(Duration.ofMinutes(1)) < 0
@@ -71,10 +70,6 @@ public class OidcConfiguration {
             throw new IllegalArgumentException("OIDC token lifetimes are outside the supported range");
         }
         properties.getClients().values().forEach(client -> {
-            if (client.getSecretHash() == null
-                    || !client.getSecretHash().matches("\\{bcrypt}\\$2[aby]\\$[0-9]{2}\\$[./A-Za-z0-9]{53}")) {
-                throw new IllegalArgumentException("OIDC client secrets must be BCrypt hashes");
-            }
             client.getPostLogoutRedirectUris().forEach(uri ->
                     OidcUrlPolicy.validateWebUri(uri, properties.isAllowIntranetHttp()));
         });

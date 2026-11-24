@@ -24,7 +24,6 @@ public class AccountDirectoryService {
     public List<AccountUser> createManagedUsers(List<SaveUserCommand> commands, String operatorId) {
         return store.saveNewUsers(commands, operatorId);
     }
-    private final ApplicationUserSyncClient syncClient;
     private final ApplicationUrlValidator urlValidator = new ApplicationUrlValidator();
 
     public AccountApplication registerApplication(RegisterApplicationCommand command) {
@@ -64,29 +63,26 @@ public class AccountDirectoryService {
 
     public AccountUser updateUser(String userId, SaveUserCommand command) {
         AccountUser user = store.updateUser(userId, command);
-        for (AccountApplication application : store.findAuthorizedApplications(userId)) {
-            if (!application.isManagedSync()) syncClient.upsert(application, user);
-        }
         return user;
     }
 
     public void authorize(String userId, String appCode) {
-        AccountUser user = store.requireUser(userId);
+        store.requireUser(userId);
         AccountApplication application = store.requireApplication(appCode);
-        if (application.isManagedSync()) throw new IllegalArgumentException("managed application requires versioned access API");
+        if (application.hasProviderConfiguration()) throw new IllegalArgumentException("managed application requires versioned access API");
         if ("disabled".equals(application.getStatus())) {
             throw new IllegalArgumentException("application is disabled");
         }
         store.authorize(userId, appCode);
-        syncClient.upsert(application, user);
+
     }
 
     public void deauthorize(String userId, String appCode) {
-        AccountUser user = store.requireUser(userId);
+        store.requireUser(userId);
         AccountApplication application = store.requireApplication(appCode);
-        if (application.isManagedSync()) throw new IllegalArgumentException("managed application requires versioned access API");
+        if (application.hasProviderConfiguration()) throw new IllegalArgumentException("managed application requires versioned access API");
         store.deauthorize(userId, appCode);
-        syncClient.disable(application, user);
+
     }
 
     public List<AccountUser> findUsers(String keyword, String status) {
@@ -147,8 +143,12 @@ public class AccountDirectoryService {
         }
         ApplicationAccess access = store.saveApplicationAccess(
                 userId, appCode, desiredStatus, expectedVersion, operatorId);
-        store.saveSyncCommand(syncCommand);
-        access.setSyncCommandId(syncCommand.getId());
+        if (application.hasProviderConfiguration()) {
+            store.saveSyncCommand(syncCommand);
+            access.setSyncCommandId(syncCommand.getId());
+        } else {
+            access.setIntegrationStatus("not_required");
+        }
         return access;
     }
 
@@ -172,11 +172,8 @@ public class AccountDirectoryService {
     }
 
     public void disableUser(String userId) {
-        AccountUser user = store.requireUser(userId);
+        store.requireUser(userId);
         store.updateUserStatus(userId, "disabled");
-        for (AccountApplication app : store.findAuthorizedApplications(userId)) {
-            syncClient.disable(app, user);
-        }
     }
 
     public AccountApplication updateApplication(String appCode, RegisterApplicationCommand command) {

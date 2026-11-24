@@ -37,7 +37,7 @@ class ApplicationMenuPermissionServiceTest {
         AccountApplication application = new AccountApplication("app-1", "Application",
                 "https://app.example", "https://app.example/callback", "https://app.example/permissions",
                 "https://app.example", "secret", "default");
-        application.setProtocolCapabilities("user_sync,menu_permission_v1");
+
         when(directory.getApplication("app-1")).thenReturn(application);
         when(directory.getUserApplicationAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
                 "user-1", "app-1", "enabled", 7, "succeeded", "command-1", null,

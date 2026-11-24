@@ -11,7 +11,6 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface ApplicationSyncMapper {
     Boolean lockApplication(@Param("appCode") String appCode);
-    void enroll(@Param("appCode") String appCode);
     ApplicationAccess lockAccess(@Param("userId") String userId, @Param("appCode") String appCode);
     ApplicationSyncDelivery find(@Param("id") String id);
     ApplicationSyncDelivery lock(@Param("id") String id);

@@ -11,7 +11,10 @@
 
     <!-- 新增角色分配 -->
     <insert id="insert">
-        insert into account_admin_roles (user_id, role_code) values (#{userId}, #{roleCode})
+        insert into account_admin_roles (user_id, role_code,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{userId}, #{roleCode}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
 
     <select id="countEnabledAdmins" resultType="int">

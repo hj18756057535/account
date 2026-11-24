@@ -1,7 +1,13 @@
 package com.hypers.account.boot2;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.integration.menu.*;
+import com.hypers.account.integration.menu.AccountMenuPermissionHandler;
+import com.hypers.account.integration.menu.AccountMenuPermissionProtocol;
+import com.hypers.account.integration.menu.AccountNonceStore;
+import com.hypers.account.integration.menu.security.AccountHmacSigner;
+import com.hypers.account.integration.menu.security.AccountMenuPermissionSignatureFilter;
+import com.hypers.account.integration.menu.web.AccountIntegrationExceptionHandler;
+import com.hypers.account.integration.menu.web.AccountMenuPermissionController;
 import javax.servlet.DispatcherType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;

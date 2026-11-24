@@ -57,11 +57,10 @@ class ManagementOverviewIntegrationTest {
                 .andExpect(jsonPath("$.counts.users").value(1))
                 .andExpect(jsonPath("$.counts.disabledUsers").value(1))
                 .andExpect(jsonPath("$.counts.grantedAccess").value(1))
-                .andExpect(jsonPath("$.counts.missingCallbacks").value(1))
                 .andExpect(jsonPath("$.counts.longDisabledUsers").value(1))
                 .andExpect(jsonPath("$.recentFailures").value(12))
                 .andExpect(jsonPath("$.failureEvents.length()").value(10))
-                .andExpect(jsonPath("$.insights.length()").value(3)).andReturn();
+                .andExpect(jsonPath("$.insights.length()").value(2)).andReturn();
         assertThat(result.getResponse().getContentAsString()).doesNotContain("synthetic-secret", "test@example.com");
     }
 

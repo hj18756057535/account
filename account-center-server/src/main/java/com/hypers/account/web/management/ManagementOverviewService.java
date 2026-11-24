@@ -29,7 +29,6 @@ public class ManagementOverviewService {
         boolean enabled = environment.getProperty("account.web.insights.enabled", Boolean.class, true);
         List<Insight> insights = new ArrayList<>();
         if (enabled) {
-            if (counts.getMissingCallbacks() > 0) insights.add(new Insight("missing_callbacks", counts.getMissingCallbacks()));
             if (counts.getLongDisabledUsers() > 0) insights.add(new Insight("long_disabled_users", counts.getLongDisabledUsers()));
             if (failures >= 3) insights.add(new Insight("repeated_failures", failures));
         }

@@ -4,11 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.admin.AdminTicketService;
 import com.hypers.account.app.AccountDirectoryService;
 import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.ApplicationUserSyncClient;
 import com.hypers.account.app.InMemoryAccountStore;
 import com.hypers.account.app.MyBatisAccountStore;
-import com.hypers.account.app.NoopApplicationUserSyncClient;
-import com.hypers.account.app.http.HttpApplicationUserSyncClient;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AdminAuthorizationService;
 import com.hypers.account.audit.AuditLogService;
@@ -41,8 +38,8 @@ public class AccountCenterConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = "account.store.type", havingValue = "memory")
-    public AccountStore inMemoryAccountStore() {
-        return new InMemoryAccountStore();
+    public AccountStore inMemoryAccountStore(Clock clock) {
+        return new InMemoryAccountStore(clock);
     }
 
     @Bean
@@ -59,26 +56,10 @@ public class AccountCenterConfiguration {
         return new HmacSignatureService();
     }
 
-    /** 同步客户端：默认使用 HTTP 真实调用，可通过 account.sync.type=noop 切换为空实现 */
-    @Bean
-    @ConditionalOnProperty(name = "account.sync.type", havingValue = "noop")
-    public ApplicationUserSyncClient noopSyncClient() {
-        return new NoopApplicationUserSyncClient();
-    }
-
-    @Bean
-    @ConditionalOnProperty(name = "account.sync.type", havingValue = "http", matchIfMissing = true)
-    public ApplicationUserSyncClient httpSyncClient(HmacSignatureService signatureService,
-                                                    ObjectMapper objectMapper,
-                                                    Clock clock) {
-        return new HttpApplicationUserSyncClient(signatureService, objectMapper, clock);
-    }
-
     @Bean
     public AccountDirectoryService accountDirectoryService(
-            AccountStore store,
-            ApplicationUserSyncClient syncClient) {
-        return new AccountDirectoryService(store, syncClient);
+            AccountStore store) {
+        return new AccountDirectoryService(store);
     }
 
     @Bean

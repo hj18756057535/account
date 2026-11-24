@@ -10,8 +10,9 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-/** 应用主数据仍由 Account 管理，配置仅提供 OIDC 专用密钥和退出回调。 */
+/** 页面登记的应用与当前 Secret 是 OIDC 客户端的事实源。 */
 @RequiredArgsConstructor
 public class OidcClientRepository implements RegisteredClientRepository {
     private final AccountStore store;
@@ -19,7 +20,7 @@ public class OidcClientRepository implements RegisteredClientRepository {
 
     @Override
     public void save(RegisteredClient client) {
-        throw new UnsupportedOperationException("Manage OIDC clients through Account applications and configuration");
+        throw new UnsupportedOperationException("Manage OIDC clients through Account applications");
     }
 
     @Override
@@ -30,17 +31,18 @@ public class OidcClientRepository implements RegisteredClientRepository {
     @Override
     public RegisteredClient findByClientId(String clientId) {
         var settings = properties.getClients().get(clientId);
-        if (settings == null) return null;
         AccountApplication application;
         try {
             application = store.requireApplication(clientId);
         } catch (IllegalArgumentException exception) {
             return null;
         }
-        if (!"enabled".equals(application.getStatus())) return null;
+        if (!"enabled".equals(application.getStatus()) || !"active".equals(application.getSecretState())
+                || application.getSecret() == null || application.getSecret().isBlank()
+                || !application.hasSsoConfiguration()) return null;
         OidcUrlPolicy.validateWebUri(application.getSsoCallbackUrl(), properties.isAllowIntranetHttp());
         var builder = RegisteredClient.withId(clientId).clientId(clientId).clientName(application.getName())
-                .clientSecret(settings.getSecretHash())
+                .clientSecret("{bcrypt}" + new BCryptPasswordEncoder().encode(application.getSecret()))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .redirectUri(application.getSsoCallbackUrl())
@@ -48,7 +50,7 @@ public class OidcClientRepository implements RegisteredClientRepository {
                 .clientSettings(ClientSettings.builder().requireProofKey(true).requireAuthorizationConsent(false).build())
                 .tokenSettings(TokenSettings.builder().authorizationCodeTimeToLive(properties.getCodeTtl())
                         .accessTokenTimeToLive(properties.getAccessTokenTtl()).build());
-        settings.getPostLogoutRedirectUris().forEach(uri -> {
+        if (settings != null) settings.getPostLogoutRedirectUris().forEach(uri -> {
             OidcUrlPolicy.validateWebUri(uri, properties.isAllowIntranetHttp());
             builder.postLogoutRedirectUri(uri);
         });

@@ -110,6 +110,27 @@ class ApiInternationalizationTest {
             assertThat(messages.text(request, key)).isEqualTo(english.getProperty(key)).isNotBlank();
         }
         assertThat(messages.text(request, "synthetic-private-error")).isEqualTo("The request is invalid.");
+        for (String tag : new String[]{"zh-TW", "vi-VN"}) {
+            Properties translated = catalog("i18n/api_" + tag.replace('-', '_') + ".properties");
+            assertThat(translated.stringPropertyNames()).isEqualTo(chinese.stringPropertyNames());
+            var localized = new MockHttpServletRequest();
+            localized.addHeader("Accept-Language", tag);
+            for (String key : chinese.stringPropertyNames()) {
+                assertThat(messages.text(localized, key)).isEqualTo(translated.getProperty(key)).isNotBlank();
+            }
+        }
+    }
+
+    @Test
+    void traditionalChineseAndVietnameseAreNegotiatedAtTheHttpBoundary() throws Exception {
+        mockMvc.perform(get("/api/users").header("Accept-Language", "zh-Hant-TW,en;q=0.5"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Content-Language", "zh-TW"))
+                .andExpect(jsonPath("$.message").value("登錄狀態已失效，請重新登錄"));
+        mockMvc.perform(get("/api/users").header("Accept-Language", "vi-VN,en;q=0.5"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Content-Language", "vi-VN"))
+                .andExpect(jsonPath("$.message").value("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."));
     }
 
     @Test

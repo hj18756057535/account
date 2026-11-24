@@ -13,21 +13,25 @@ public class ApplicationUrlValidator {
     public void validate(RegisterApplicationCommand command) {
         validateHttpUrl("entryUrl", command.getEntryUrl());
         validateHttpUrl("ssoCallbackUrl", command.getSsoCallbackUrl());
-        validateHttpUrl("permissionIframeUrl",
-                command.getPermissionIframeUrl().replace("{externalUserId}", "externalUserId"));
+        validateHttpUrl("permissionIframeUrl", command.getPermissionIframeUrl() == null ? null
+                : command.getPermissionIframeUrl().replace("{externalUserId}", "externalUserId"));
         validateHttpUrl("notifyBaseUrl", command.getNotifyBaseUrl());
     }
 
     public void validate(SaveApplicationCommand command) {
         validateHttpUrl("entryUrl", command.getEntryUrl());
         validateHttpUrl("ssoCallbackUrl", command.getSsoCallbackUrl());
-        validateHttpUrl("permissionIframeUrl",
-                command.getPermissionIframeUrl().replace("{externalUserId}", "externalUserId"));
-        validateHttpUrl("notifyBaseUrl", command.getNotifyBaseUrl());
+        if (command.getPermissionIframeUrl() != null && !command.getPermissionIframeUrl().isBlank()) {
+            validateHttpUrl("permissionIframeUrl", command.getPermissionIframeUrl().replace("{externalUserId}", "externalUserId"));
+        }
+        if (command.getNotifyBaseUrl() != null && !command.getNotifyBaseUrl().isBlank()) {
+            validateHttpUrl("notifyBaseUrl", command.getNotifyBaseUrl());
+        }
     }
 
     private void validateHttpUrl(String field, String value) {
-        if (value == null || value.contains("*")) {
+        if (value == null || value.isBlank()) return;
+        if (value.contains("*")) {
             throw new IllegalArgumentException(field + " must be an exact URL");
         }
         URI uri = parse(field, value);

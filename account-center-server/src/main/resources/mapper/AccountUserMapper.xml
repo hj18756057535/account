@@ -10,7 +10,6 @@
         <result property="applications" column="applications"/>
         <result property="disabledApplications" column="disabled_applications"/>
         <result property="grantedAccess" column="granted_access"/>
-        <result property="missingCallbacks" column="missing_callbacks"/>
         <result property="longDisabledUsers" column="long_disabled_users"/>
     </resultMap>
 
@@ -21,9 +20,6 @@
           (select count(*) from account_applications) as applications,
           (select count(*) from account_applications where status = 'disabled') as disabled_applications,
           (select count(*) from account_user_applications where desired_status = 'enabled') as granted_access,
-          (select count(*) from account_applications where status = 'enabled'
-            and concat(',', protocol_capabilities, ',') like '%,sso,%'
-            and (sso_callback_url is null or trim(sso_callback_url) = '')) as missing_callbacks,
           (select count(*) from account_users where status = 'disabled'
             and updated_at &lt; #{disabledBefore}) as long_disabled_users
     </select>
@@ -33,12 +29,25 @@
         <foreach collection="accounts" item="account" open="(" separator="," close=")">#{account}</foreach>
     </select>
 
+    <select id="selectByAccountsOrIds" resultMap="userPublicResultMap">
+        SELECT id, account, email, name, phone, status, version, created_by, updated_by, created_at, updated_at
+        FROM account_users
+        <where>
+            <if test="accounts != null and accounts.size() > 0">
+                account IN <foreach collection="accounts" item="account" open="(" separator="," close=")">#{account}</foreach>
+            </if>
+            <if test="ids != null and ids.size() > 0">
+                OR id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </if>
+        </where>
+    </select>
+
     <insert id="insertBatch">
-        insert into account_users (id, account, email, name, phone, status, version, created_by)
+        insert into account_users (id, account, email, name, phone, status, version,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
         values
         <foreach collection="users" item="user" separator=",">
-            (#{user.id}, #{user.account}, #{user.email}, #{user.name}, #{user.phone},
-             #{user.status}, #{user.version}, #{user.createdBy})
+            (#{user.id}, #{user.account}, #{user.email}, #{user.name}, #{user.phone}, #{user.status}, #{user.version}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
         </foreach>
     </insert>
 
@@ -66,14 +75,18 @@
         <result property="phone" column="phone"/>
         <result property="status" column="status"/>
         <result property="version" column="version"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="updatedBy" column="updated_by"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <!-- 新增用户（密码为 BCrypt 哈希值，可为空表示未设置密码） -->
     <insert id="insert">
-        insert into account_users (id, account, email, name, phone, status, version, password, created_by)
-        values (#{user.id}, #{user.account}, #{user.email}, #{user.name}, #{user.phone}, #{user.status}, #{user.version}, #{user.password}, #{user.createdBy})
+        insert into account_users (id, account, email, name, phone, status, version, password,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{user.id}, #{user.account}, #{user.email}, #{user.name}, #{user.phone}, #{user.status}, #{user.version}, #{user.password}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
 
     <!-- 更新用户基本信息（不含状态，状态通过 updateStatus 单独管理） -->
@@ -83,9 +96,8 @@
             email = #{user.email},
             name = #{user.name},
             phone = #{user.phone},
-            updated_by = #{user.updatedBy},
-            updated_at = current_timestamp,
-            version = version + 1
+            version = version + 1,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{user.id}
     </update>
 
@@ -95,9 +107,8 @@
             email = #{user.email},
             name = #{user.name},
             phone = #{user.phone},
-            updated_by = #{user.updatedBy},
-            updated_at = current_timestamp,
-            version = version + 1
+            version = version + 1,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{user.id} and version = #{expectedVersion}
     </update>
 
@@ -132,7 +143,7 @@
     </select>
 
     <select id="selectPage" resultMap="userPublicResultMap">
-        select id, account, email, name, phone, status, version, created_at, updated_at
+        select id, account, email, name, phone, status, version, created_by, updated_by, created_at, updated_at
         from account_users
         <where>
             <if test="query.status != null and query.status != ''">
@@ -176,21 +187,24 @@
 
     <!-- 更新用户状态（启用/禁用） -->
     <update id="updateStatus">
-        update account_users set status = #{status}, updated_at = current_timestamp, version = version + 1 where id = #{id}
+        update account_users set status = #{status}, version = version + 1,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
+        where id = #{id}
     </update>
 
     <update id="updateStatusVersioned">
         update account_users
         set status = #{status},
-            updated_by = #{updatedBy},
-            updated_at = current_timestamp,
-            version = version + 1
+            version = version + 1,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{id} and version = #{expectedVersion}
     </update>
 
     <!-- 设置用户密码（BCrypt 哈希值） -->
     <update id="updatePassword">
-        update account_users set password = #{password}, updated_at = current_timestamp where id = #{id}
+        update account_users set password = #{password},
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
+        where id = #{id}
     </update>
 
 </mapper>

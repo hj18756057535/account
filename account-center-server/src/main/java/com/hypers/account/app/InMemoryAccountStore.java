@@ -1,5 +1,7 @@
 package com.hypers.account.app;
 
+import com.hypers.account.audit.AuditMetadataProvider;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -12,6 +14,15 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class InMemoryAccountStore implements AccountStore {
+    private final AuditMetadataProvider audit;
+
+    public InMemoryAccountStore() {
+        this(Clock.systemUTC());
+    }
+
+    public InMemoryAccountStore(Clock clock) {
+        this.audit = new AuditMetadataProvider(clock);
+    }
 
     @Override
     public synchronized OverviewCounts overviewCounts(java.time.Instant disabledBefore) {
@@ -22,11 +33,6 @@ public class InMemoryAccountStore implements AccountStore {
         counts.setDisabledApplications(applicationsByCode.values().stream()
                 .filter(a -> "disabled".equals(a.getStatus())).count());
         counts.setGrantedAccess(authorizedAppsByUserId.values().stream().mapToLong(Set::size).sum());
-        counts.setMissingCallbacks(applicationsByCode.values().stream()
-                .filter(a -> "enabled".equals(a.getStatus()))
-                .filter(a -> a.getProtocolCapabilities() != null
-                        && java.util.Arrays.asList(a.getProtocolCapabilities().split(",")).contains("sso"))
-                .filter(a -> a.getSsoCallbackUrl() == null || a.getSsoCallbackUrl().isBlank()).count());
         counts.setLongDisabledUsers(usersById.values().stream()
                 .filter(u -> "disabled".equals(u.getStatus()) && u.getUpdatedAt() != null
                         && u.getUpdatedAt().isBefore(disabledBefore)).count());
@@ -41,12 +47,31 @@ public class InMemoryAccountStore implements AccountStore {
 
     @Override
     public synchronized List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId) {
+        return saveNewUsers(commands, java.util.Collections.emptySet(), operatorId);
+    }
+
+    @Override
+    public List<AccountUser> findUsersByAccountsOrIds(List<String> accounts, List<String> ids) {
+        Set<String> requestedAccounts = new HashSet<>(accounts);
+        Set<String> requestedIds = new HashSet<>(ids);
+        return usersById.values().stream().filter(user -> requestedAccounts.contains(user.getAccount())
+                || requestedIds.contains(user.getId())).toList();
+    }
+
+    @Override
+    public synchronized List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, Set<String> disabledAccounts, String operatorId) {
         var seen = new HashSet<String>();
         for (var command : commands) {
             if (!seen.add(command.getAccount())) throw new AccountAlreadyExistsException();
             ensureAccountAvailable(command.getAccount(), null);
         }
-        return commands.stream().map(command -> saveNewUser(command, operatorId)).toList();
+        return commands.stream().map(command -> {
+            AccountUser user = saveNewUser(command, operatorId);
+            if (disabledAccounts.contains(user.getAccount())) {
+                user.setStatus("disabled");
+            }
+            return user;
+        }).toList();
     }
 
     private final Map<String, AccountUser> usersById = new HashMap<>();
@@ -69,7 +94,7 @@ public class InMemoryAccountStore implements AccountStore {
                 command.getEmail(),
                 command.getName(),
                 command.getPhone());
-        user.setCreatedBy(operatorId);
+        audit.fill(user, true, operatorId);
         usersById.put(user.getId(), user);
         return user;
     }
@@ -81,6 +106,7 @@ public class InMemoryAccountStore implements AccountStore {
         AccountUser user = new AccountUser(userId, command.getAccount(), command.getEmail(), command.getName(), command.getPhone(),
                 old.getStatus(), old.getVersion() + 1, old.getCreatedBy(), old.getUpdatedBy(), old.getCreatedAt(), old.getUpdatedAt());
         usersById.put(userId, user);
+        audit.fill(user, false, null);
         return user;
     }
 
@@ -97,6 +123,7 @@ public class InMemoryAccountStore implements AccountStore {
         AccountUser user = new AccountUser(userId, command.getAccount(), command.getEmail(), command.getName(), command.getPhone(),
                 old.getStatus(), old.getVersion() + 1, old.getCreatedBy(), operatorId, old.getCreatedAt(), old.getUpdatedAt());
         user.setPassword(old.getPassword());
+        audit.fill(user, false, operatorId);
         usersById.put(userId, user);
         return user;
     }
@@ -115,6 +142,12 @@ public class InMemoryAccountStore implements AccountStore {
                 command.getNotifyBaseUrl(),
                 command.getSecret(),
                 defaultTenantCode);
+        AccountApplication previous = applicationsByCode.get(application.getAppCode());
+        if (previous != null) {
+            application.setCreatedBy(previous.getCreatedBy());
+            application.setCreatedAt(previous.getCreatedAt());
+        }
+        audit.fill(application, previous == null, null);
         applicationsByCode.put(application.getAppCode(), application);
         return application;
     }
@@ -125,6 +158,7 @@ public class InMemoryAccountStore implements AccountStore {
             throw new ApplicationAlreadyExistsException();
         }
         AccountApplication application = toManagedApplication(command, operatorId);
+        audit.fill(application, true, operatorId);
         applicationsByCode.put(application.getAppCode(), application);
         return application;
     }
@@ -141,8 +175,8 @@ public class InMemoryAccountStore implements AccountStore {
         application.setPermissionIframeUrl(command.getPermissionIframeUrl());
         application.setNotifyBaseUrl(command.getNotifyBaseUrl());
         application.setDefaultTenantCode(normalizeTenant(command.getDefaultTenantCode()));
-        application.setProtocolCapabilities(command.getProtocolCapabilities());
-        application.setUpdatedBy(operatorId);
+
+        audit.fill(application, false, operatorId);
         application.setVersion(application.getVersion() + 1);
         return application;
     }
@@ -224,7 +258,15 @@ public class InMemoryAccountStore implements AccountStore {
 
     @Override
     public boolean isAuthorized(String userId, String appCode) {
-        return authorizedAppsByUserId.computeIfAbsent(userId, ignored -> new HashSet<>()).contains(appCode);
+        AccountUser user = usersById.get(userId);
+        AccountApplication app = applicationsByCode.get(appCode);
+        if (user == null || app == null || !"enabled".equals(user.getStatus()) || !"enabled".equals(app.getStatus())
+                || !authorizedAppsByUserId.getOrDefault(userId, Set.of()).contains(appCode)) return false;
+        if (!app.hasProviderConfiguration()) return true;
+        ApplicationAccess access = applicationAccessByKey.get(accessKey(userId, appCode));
+        return access != null && "enabled".equals(access.getDesiredStatus())
+                && "enabled".equals(access.getAppliedStatus()) && access.getAppliedVersion() != null
+                && access.getAppliedVersion() == access.getVersion();
     }
 
     @Override
@@ -289,6 +331,7 @@ public class InMemoryAccountStore implements AccountStore {
         AccountUser user = requireUser(userId);
         user.setStatus(status);
         user.setVersion(user.getVersion() + 1);
+        audit.fill(user, false, null);
     }
 
     @Override
@@ -301,7 +344,7 @@ public class InMemoryAccountStore implements AccountStore {
             throw new ResourceVersionConflictException();
         }
         user.setStatus(status);
-        user.setUpdatedBy(operatorId);
+        audit.fill(user, false, operatorId);
         user.setVersion(user.getVersion() + 1);
         return user;
     }
@@ -310,6 +353,7 @@ public class InMemoryAccountStore implements AccountStore {
     public void updateApplicationStatus(String appCode, String status) {
         AccountApplication app = requireApplication(appCode);
         app.setStatus(status);
+        audit.fill(app, false, null);
     }
 
     @Override
@@ -322,7 +366,7 @@ public class InMemoryAccountStore implements AccountStore {
             throw new ResourceVersionConflictException();
         }
         application.setStatus(status);
-        application.setUpdatedBy(operatorId);
+        audit.fill(application, false, operatorId);
         application.setVersion(application.getVersion() + 1);
         return application;
     }
@@ -332,6 +376,7 @@ public class InMemoryAccountStore implements AccountStore {
         AccountApplication app = requireApplication(appCode);
         app.setSecret(newSecret);
         app.setSecretVersion(newVersion);
+        audit.fill(app, false, null);
     }
 
     @Override
@@ -347,7 +392,7 @@ public class InMemoryAccountStore implements AccountStore {
         application.setSecret(newSecret);
         application.setSecretVersion(newSecretVersion);
         application.setSecretState("active");
-        application.setUpdatedBy(operatorId);
+        audit.fill(application, false, operatorId);
         application.setVersion(application.getVersion() + 1);
         return application;
     }
@@ -361,7 +406,7 @@ public class InMemoryAccountStore implements AccountStore {
             throw new ResourceVersionConflictException();
         }
         application.setSecretState("revoked");
-        application.setUpdatedBy(operatorId);
+        audit.fill(application, false, operatorId);
         application.setVersion(application.getVersion() + 1);
         return application;
     }
@@ -378,6 +423,7 @@ public class InMemoryAccountStore implements AccountStore {
     public void setUserPassword(String userId, String encodedPassword) {
         AccountUser user = requireUser(userId);
         user.setPassword(encodedPassword);
+        audit.fill(user, false, null);
     }
 
     private void ensureAccountAvailable(String account, String currentUserId) {
@@ -392,7 +438,7 @@ public class InMemoryAccountStore implements AccountStore {
                 command.getAppCode(), command.getName(), command.getEntryUrl(), command.getSsoCallbackUrl(),
                 command.getPermissionIframeUrl(), command.getNotifyBaseUrl(), command.getSecret(),
                 normalizeTenant(command.getDefaultTenantCode()));
-        application.setProtocolCapabilities(command.getProtocolCapabilities());
+
         application.setCreatedBy(operatorId);
         return application;
     }

@@ -1,6 +1,8 @@
 package com.hypers.account.app;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -10,8 +12,6 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class AccountApplication {
-
-    public static final String DEFAULT_PROTOCOL_CAPABILITIES = "sso,admin_ticket,user_sync";
 
     private String appCode;
     private String name;
@@ -24,9 +24,7 @@ public class AccountApplication {
     private String status;
     private Integer secretVersion;
     private String secretState;
-    private String protocolCapabilities;
     private Long version;
-    private boolean managedSync;
     private String createdBy;
     private String updatedBy;
     private Instant createdAt;
@@ -36,7 +34,7 @@ public class AccountApplication {
                               String permissionIframeUrl, String notifyBaseUrl, String secret,
                               String defaultTenantCode) {
         this(appCode, name, entryUrl, ssoCallbackUrl, permissionIframeUrl, notifyBaseUrl, secret,
-                defaultTenantCode, "enabled", 1, "active", DEFAULT_PROTOCOL_CAPABILITIES, 1L,
+                defaultTenantCode, "enabled", 1, "active", 1L,
                 null, null, null, null);
     }
 
@@ -46,14 +44,14 @@ public class AccountApplication {
                               String createdBy, String updatedBy,
                               Instant createdAt, Instant updatedAt) {
         this(appCode, name, entryUrl, ssoCallbackUrl, permissionIframeUrl, notifyBaseUrl, secret,
-                defaultTenantCode, status, secretVersion, "active", DEFAULT_PROTOCOL_CAPABILITIES, 1L,
+                defaultTenantCode, status, secretVersion, "active", 1L,
                 createdBy, updatedBy, createdAt, updatedAt);
     }
 
     public AccountApplication(String appCode, String name, String entryUrl, String ssoCallbackUrl,
                               String permissionIframeUrl, String notifyBaseUrl, String secret,
                               String defaultTenantCode, String status, Integer secretVersion,
-                              String secretState, String protocolCapabilities, Long version,
+                              String secretState, Long version,
                               String createdBy, String updatedBy,
                               Instant createdAt, Instant updatedAt) {
         this.appCode = appCode;
@@ -67,11 +65,27 @@ public class AccountApplication {
         this.status = status;
         this.secretVersion = secretVersion;
         this.secretState = secretState;
-        this.protocolCapabilities = protocolCapabilities;
         this.version = version;
         this.createdBy = createdBy;
         this.updatedBy = updatedBy;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+    }
+
+    public boolean hasSsoConfiguration() {
+        return ssoCallbackUrl != null && !ssoCallbackUrl.isBlank();
+    }
+
+    public boolean hasProviderConfiguration() {
+        return notifyBaseUrl != null && !notifyBaseUrl.isBlank();
+    }
+
+    /** 可用功能由地址配置推导，只读展示，不保存另一份开关。 */
+    public String getProtocolCapabilities() {
+        List<String> available = new ArrayList<>();
+        if (hasSsoConfiguration()) available.add("sso");
+        if (permissionIframeUrl != null && !permissionIframeUrl.isBlank()) available.add("admin_ticket");
+        if (hasProviderConfiguration()) available.addAll(List.of("directory", "user_sync", "menu_permission_v1"));
+        return String.join(",", available);
     }
 }

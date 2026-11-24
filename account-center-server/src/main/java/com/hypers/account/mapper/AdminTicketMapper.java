@@ -25,6 +25,8 @@ public interface AdminTicketMapper {
     /** 标记 ticket 已使用（一次性凭证） */
     void markUsed(@Param("code") String code);
 
+    int consume(@Param("code") String code, @Param("appCode") String appCode, @Param("now") String now);
+
     /** 检查 ticket 是否已被使用 */
     Integer countUsed(@Param("code") String code);
 

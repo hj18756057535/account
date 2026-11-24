@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hypers.account.mapper.DirectoryImportMapper">
+    <resultMap id="record" type="com.hypers.account.app.directory.DirectoryImportRecord">
+        <id column="id" property="id"/>
+        <result column="app_code" property="appCode"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="application_version" property="applicationVersion"/>
+        <result column="status" property="status"/>
+        <result column="snapshot_json" property="snapshotJson"/>
+        <result column="result_json" property="resultJson"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="expires_at" property="expiresAt"/>
+        <result column="committed_at" property="committedAt"/>
+    </resultMap>
+    <resultMap id="link" type="com.hypers.account.app.directory.ApplicationUserLink">
+        <id column="app_code" property="appCode"/>
+        <id column="user_id" property="userId"/>
+        <result column="tenant_code" property="tenantCode"/>
+        <result column="local_user_id" property="localUserId"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+    <sql id="fields">id, app_code, operator_id, application_version, status, snapshot_json, result_json, created_at, expires_at, committed_at, created_by, updated_by, updated_at</sql>
+    <insert id="insert">
+        insert into account_directory_imports (id, app_code, operator_id, application_version, status, snapshot_json, result_json, expires_at, committed_at,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{record.id}, #{record.appCode}, #{record.operatorId}, #{record.applicationVersion}, #{record.status}, #{record.snapshotJson}, #{record.resultJson}, #{record.expiresAt}, #{record.committedAt}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
+    </insert>
+    <select id="find" resultMap="record">SELECT <include refid="fields"/> FROM account_directory_imports WHERE id = #{id}</select>
+    <select id="latestCommitted" resultMap="record">
+        SELECT <include refid="fields"/> FROM account_directory_imports
+        WHERE app_code = #{appCode} AND status = 'committed' ORDER BY committed_at DESC, id DESC LIMIT 1
+    </select>
+    <update id="commit">
+        UPDATE account_directory_imports SET status = 'committed', result_json = #{record.resultJson}, committed_at = #{record.committedAt},
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
+        where id = #{record.id} AND status = 'preview'
+    </update>
+    <select id="links" resultMap="link">
+        SELECT app_code, user_id, tenant_code, local_user_id, created_by, created_at, updated_by, updated_at
+        FROM account_application_user_links WHERE app_code = #{appCode} ORDER BY user_id
+    </select>
+    <select id="link" resultMap="link">
+        SELECT app_code, user_id, tenant_code, local_user_id, created_by, created_at, updated_by, updated_at
+        FROM account_application_user_links WHERE app_code = #{appCode} AND user_id = #{userId}
+    </select>
+    <select id="confirmedLinks" resultMap="link">
+        SELECT s.app_code, s.user_id, a.default_tenant_code AS tenant_code, s.local_user_id, s.created_by, s.created_at, s.updated_by, s.updated_at
+        FROM account_application_user_states s
+        INNER JOIN account_applications a ON a.app_code = s.app_code
+        WHERE s.app_code = #{appCode} ORDER BY s.user_id
+    </select>
+    <insert id="insertLinks">
+        insert into account_application_user_links (app_code, user_id, tenant_code, local_user_id,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+        <foreach collection="links" item="link" separator=",">
+            (#{link.appCode}, #{link.userId}, #{link.tenantCode}, #{link.localUserId}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
+        </foreach>
+    </insert>
+</mapper>
+

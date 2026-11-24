@@ -1,5 +1,4 @@
--- Account Center 完整初始化基线；仅用于空库，由 Flyway 执行并记录 V1。
--- 已获开发者批准重建未发布测试库；本文件不清库、不迁移旧数据、不插入环境数据。
+-- 全新开发阶段的完整初始化结构；仅对空库执行，不包含历史兼容或回填。
 
 -- 全局用户
 create table account_users (
@@ -35,7 +34,6 @@ create table account_applications (
     created_at timestamp not null default current_timestamp comment '创建时间', -- 创建时间
     updated_at timestamp null comment '最后修改时间', -- 最后修改时间
     version bigint not null default 1 comment '资源乐观锁版本；初始为 1，每次更新递增', -- 资源乐观锁版本；初始为 1，每次更新递增
-    protocol_capabilities varchar(255) not null default 'sso,admin_ticket,user_sync' comment '协议能力编码列表，逗号分隔：sso、admin_ticket、user_sync', -- 协议能力编码列表，逗号分隔：sso、admin_ticket、user_sync
     secret_state varchar(32) not null default 'active' comment '密钥状态：active 可用、revoked 已撤销' -- 密钥状态：active 可用、revoked 已撤销
 ) engine=InnoDB default charset=utf8mb4 comment='应用登记';
 
@@ -51,6 +49,7 @@ create table account_user_applications (
     version bigint not null default 1 comment '资源乐观锁版本；初始为 1，每次更新递增', -- 资源乐观锁版本；初始为 1，每次更新递增
     updated_by varchar(64) comment '最后修改人 ID', -- 最后修改人 ID
     updated_at timestamp null comment '最后修改时间', -- 最后修改时间
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
     primary key (user_id, app_code),
     constraint fk_ua_user foreign key (user_id) references account_users (id),
     constraint fk_ua_app foreign key (app_code) references account_applications (app_code)
@@ -66,7 +65,10 @@ create table account_operation_logs (
     detail text comment '脱敏操作摘要 JSON；禁止保存密码、Secret、票据或个人敏感值', -- 脱敏操作摘要 JSON；禁止保存密码、Secret、票据或个人敏感值
     created_at timestamp not null default current_timestamp comment '操作时间', -- 操作时间
     trace_id varchar(64) comment '服务端请求关联 ID；历史记录或非请求调用允许为空', -- 服务端请求关联 ID；历史记录或非请求调用允许为空
-    outcome varchar(16) not null default 'unknown' comment '结果：success 成功、failure 失败、unknown 历史未记录' -- 结果：success 成功、failure 失败、unknown 历史未记录
+    outcome varchar(16) not null default 'unknown' comment '结果：success 成功、failure 失败、unknown 历史未记录', -- 结果：success 成功、failure 失败、unknown 历史未记录
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC' -- 更新时间，UTC
 ) engine=InnoDB default charset=utf8mb4 comment='操作审计日志';
 
 -- HMAC Nonce 防重放记录
@@ -75,7 +77,10 @@ create table account_nonce_records (
     app_code varchar(64) not null comment '所属应用编码', -- 所属应用编码
     purpose varchar(64) not null comment '用途标识', -- 用途标识
     expires_at timestamp not null comment '过期时间', -- 过期时间
-    created_at timestamp not null default current_timestamp comment '创建时间' -- 创建时间
+    created_at timestamp not null default current_timestamp comment '创建时间', -- 创建时间
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC' -- 更新时间，UTC
 ) engine=InnoDB default charset=utf8mb4 comment='HMAC Nonce 防重放记录';
 
 -- 管理端一次性票据
@@ -86,7 +91,10 @@ create table account_admin_tickets (
     purpose varchar(64) not null comment '用途：iframe-permission 等', -- 用途：iframe-permission 等
     expires_at timestamp not null comment '票据过期时间；有效期由服务端配置决定', -- 票据过期时间；有效期由服务端配置决定
     used_at timestamp null comment '使用时间（一次性，使用后标记）', -- 使用时间（一次性，使用后标记）
-    created_at timestamp not null default current_timestamp comment '创建时间' -- 创建时间
+    created_at timestamp not null default current_timestamp comment '创建时间', -- 创建时间
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC' -- 更新时间，UTC
 ) engine=InnoDB default charset=utf8mb4 comment='管理端一次性票据';
 
 -- 管理角色分配
@@ -94,6 +102,9 @@ create table account_admin_roles (
     user_id varchar(64) not null comment '用户 ID', -- 用户 ID
     role_code varchar(64) not null comment '角色编码：ACCOUNT_ADMIN / ACCOUNT_AUDITOR', -- 角色编码：ACCOUNT_ADMIN / ACCOUNT_AUDITOR
     created_at timestamp not null default current_timestamp comment '分配时间', -- 分配时间
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC', -- 更新时间，UTC
     primary key (user_id, role_code)
 ) engine=InnoDB default charset=utf8mb4 comment='管理角色分配';
 
@@ -110,6 +121,9 @@ create table account_idempotency_records (
     response_body text comment '可重放响应 JSON；敏感结果不持久化，保存空 JSON 对象', -- 可重放响应 JSON；敏感结果不持久化，保存空 JSON 对象
     created_at timestamp not null default current_timestamp comment '创建时间', -- 创建时间
     expires_at timestamp not null comment '过期时间；保留期限由服务端定义', -- 过期时间；保留期限由服务端定义
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC', -- 更新时间，UTC
     constraint uk_account_idempotency_scope unique (operator_id, request_method, request_path, idempotency_key)
 ) engine=InnoDB default charset=utf8mb4 comment='管理写请求幂等记录';
 
@@ -128,16 +142,19 @@ create table account_sync_commands (
     trace_id varchar(64) not null comment '服务端关联 ID；用于请求或命令追踪', -- 服务端关联 ID；用于请求或命令追踪
     created_at timestamp not null default current_timestamp comment '创建时间', -- 创建时间
     updated_at timestamp null comment '最后修改时间', -- 最后修改时间
+    payload_json longtext comment '冻结的用户同步请求，终态或保留到期后清除', -- 冻结的用户同步请求，终态或保留到期后清除
+    payload_hash varchar(64) comment '冻结请求 SHA-256 摘要', -- 冻结请求 SHA-256 摘要
+    operator_id varchar(64) comment '发起当前命令的管理员标识', -- 发起当前命令的管理员标识
+    target_application_version bigint comment '冻结目标应用配置版本', -- 冻结目标应用配置版本
+    lease_token varchar(64) comment '当前处理租约随机标识，防止过时提交', -- 当前处理租约随机标识，防止过时提交
+    lease_expires_at timestamp null comment '处理租约到期时间 UTC', -- 处理租约到期时间 UTC
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
     constraint uk_account_sync_command_idempotency unique (idempotency_key),
     constraint fk_sync_command_user foreign key (user_id) references account_users (id),
     constraint fk_sync_command_app foreign key (app_code) references account_applications (app_code)
 ) engine=InnoDB default charset=utf8mb4 comment='应用准入同步命令';
 
--- 查询与过期清理索引
-create index idx_account_idempotency_expires on account_idempotency_records (expires_at);
-create index idx_account_sync_commands_pending on account_sync_commands (status, created_at);
-create index idx_account_audit_page on account_operation_logs (created_at, id);
-create index idx_account_audit_trace on account_operation_logs (trace_id);
 -- 用户导入暂存表，仅管理员本人可访问
 create table account_user_imports (
     id varchar(64) primary key comment '导入批次唯一标识 UUID', -- 导入批次唯一标识 UUID
@@ -156,4 +173,83 @@ create table account_user_imports (
     constraint ck_user_import_count check (row_count between 1 and 1000)
 ) engine=InnoDB default charset=utf8mb4 comment='用户导入暂存表，仅管理员本人可访问';
 
+-- 应用用户映射与可靠准入确认
+create table account_application_user_states (
+    user_id varchar(64) not null comment '全局用户标识，关联账号中心用户', -- 全局用户标识，关联账号中心用户
+    app_code varchar(64) not null comment '所属应用编码', -- 所属应用编码
+    local_user_id varchar(255) not null comment '应用确认的本地用户标识，不按账号猜测', -- 应用确认的本地用户标识，不按账号猜测
+    applied_status varchar(32) not null comment '已确认准入状态 enabled 或 disabled', -- 已确认准入状态 enabled 或 disabled
+    applied_version bigint not null comment '已确认准入版本，必须匹配投递命令', -- 已确认准入版本，必须匹配投递命令
+    last_synced_at timestamp not null comment '最近确认时间 UTC', -- 最近确认时间 UTC
+    created_by varchar(64) comment '首次确认关联的操作人', -- 首次确认关联的操作人
+    updated_by varchar(64) comment '最近确认关联的操作人', -- 最近确认关联的操作人
+    created_at timestamp not null default current_timestamp comment '创建时间 UTC', -- 创建时间 UTC
+    updated_at timestamp null comment '最近更新时间 UTC', -- 最近更新时间 UTC
+    primary key (user_id, app_code),
+    constraint uk_app_local_user unique (app_code, local_user_id),
+    constraint fk_app_state_user foreign key (user_id) references account_users (id),
+    constraint fk_app_state_app foreign key (app_code) references account_applications (app_code),
+    constraint ck_app_state_status check (applied_status in ('enabled', 'disabled')),
+    constraint ck_app_state_version check (applied_version > 0)
+) engine=InnoDB default charset=utf8mb4 comment='应用用户映射与可靠准入确认';
+
+-- OIDC授权记录，载荷含敏感凭据
+create table account_oidc_authorizations (
+    id varchar(100) primary key comment '授权记录标识', -- 授权记录标识
+    client_id varchar(64) not null comment '客户端应用编码，关联现有应用主数据', -- 客户端应用编码，关联现有应用主数据
+    principal_name varchar(64) not null comment '全局用户标识，作为稳定主体', -- 全局用户标识，作为稳定主体
+    payload longtext not null comment '内部授权载荷，含敏感凭据，禁止日志及普通接口访问', -- 内部授权载荷，含敏感凭据，禁止日志及普通接口访问
+    state_hash varchar(64) comment '授权状态参数的 SHA256 摘要', -- 授权状态参数的 SHA256 摘要
+    code_hash varchar(64) comment '授权码 SHA256 摘要', -- 授权码 SHA256 摘要
+    access_token_hash varchar(64) comment '访问令牌 SHA256 摘要', -- 访问令牌 SHA256 摘要
+    id_token_hash varchar(64) comment '身份令牌 SHA256 摘要', -- 身份令牌 SHA256 摘要
+    code_redeemed boolean not null default false comment '授权码是否已失效，原子阻止重复兑换', -- 授权码是否已失效，原子阻止重复兑换
+    created_by varchar(64) not null comment '创建授权的全局用户标识', -- 创建授权的全局用户标识
+    updated_by varchar(64) not null comment '更新授权的全局用户标识', -- 更新授权的全局用户标识
+    created_at timestamp not null comment '创建时间，UTC', -- 创建时间，UTC
+    updated_at timestamp not null comment '更新时间，UTC' -- 更新时间，UTC
+) engine=InnoDB default charset=utf8mb4 comment='OIDC授权记录，载荷含敏感凭据';
+
+-- 应用用户角色组织目录导入记录
+create table account_directory_imports (
+    id varchar(64) primary key comment '目录导入记录 UUID', -- 目录导入记录 UUID
+    app_code varchar(64) not null comment '来源应用编码', -- 来源应用编码
+    operator_id varchar(64) not null comment '执行预览和提交的管理员', -- 执行预览和提交的管理员
+    application_version bigint not null comment '预览时的应用版本', -- 预览时的应用版本
+    status varchar(16) not null comment '状态 preview 或 committed', -- 状态 preview 或 committed
+    snapshot_json longtext not null comment '用户角色组织来源快照，不包含密码令牌', -- 用户角色组织来源快照，不包含密码令牌
+    result_json longtext comment '不含凭据的导入结果', -- 不含凭据的导入结果
+    created_at timestamp not null comment '预览创建时间', -- 预览创建时间
+    expires_at timestamp not null comment '未提交预览的过期时间', -- 未提交预览的过期时间
+    committed_at timestamp comment '完成导入的时间', -- 完成导入的时间
+    created_by varchar(64) comment '创建人；system 表示系统操作', -- 创建人；system 表示系统操作
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC' -- 更新时间，UTC
+) engine=InnoDB default charset=utf8mb4 comment='应用用户角色组织目录导入记录';
+
+-- 应用来源本地用户与全局身份关联
+create table account_application_user_links (
+    app_code varchar(64) not null comment '来源应用编码', -- 来源应用编码
+    user_id varchar(64) not null comment 'Account 全局用户 ID', -- Account 全局用户 ID
+    tenant_code varchar(64) not null comment '来源固定租户编码', -- 来源固定租户编码
+    local_user_id varchar(255) not null comment '来源本地用户 ID，保留原精度', -- 来源本地用户 ID，保留原精度
+    created_by varchar(64) not null comment '确认关联的管理员', -- 确认关联的管理员
+    created_at timestamp not null comment '首次确认关联时间', -- 首次确认关联时间
+    updated_by varchar(64) comment '更新人；system 表示系统操作', -- 更新人；system 表示系统操作
+    updated_at timestamp comment '更新时间，UTC', -- 更新时间，UTC
+    primary key (app_code, user_id),
+    constraint uk_account_user_link_local unique (app_code, tenant_code, local_user_id)
+) engine=InnoDB default charset=utf8mb4 comment='应用来源本地用户与全局身份关联';
+
+create index idx_account_idempotency_expires on account_idempotency_records (expires_at);
+create index idx_account_sync_commands_pending on account_sync_commands (status, created_at);
+create index idx_account_audit_page on account_operation_logs (created_at, id);
+create index idx_account_audit_trace on account_operation_logs (trace_id);
 create index idx_user_import_expires on account_user_imports (expires_at);
+create index idx_sync_retry on account_sync_commands (status, next_retry_at);
+create index idx_sync_access_version on account_sync_commands (user_id, app_code, sync_version);
+create unique index uk_account_oidc_code on account_oidc_authorizations (code_hash);
+create unique index uk_account_oidc_access on account_oidc_authorizations (access_token_hash);
+create unique index uk_account_oidc_id_token on account_oidc_authorizations (id_token_hash);
+create unique index uk_account_oidc_state on account_oidc_authorizations (state_hash);
+create index idx_account_directory_latest on account_directory_imports (app_code, status, committed_at);

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hypers.account.audit.AuditFields">
+    <sql id="insertColumns">created_by, updated_by, created_at, updated_at</sql>
+    <sql id="insertValues">#{_audit.actor}, #{_audit.actor}, #{_audit.time,jdbcType=TIMESTAMP}, #{_audit.time,jdbcType=TIMESTAMP}</sql>
+    <sql id="updateFields">updated_by = #{_audit.actor}, updated_at = #{_audit.time,jdbcType=TIMESTAMP}</sql>
+</mapper>

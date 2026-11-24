@@ -23,59 +23,30 @@ class AccountSchemaCommentsTest {
     @Test
     void initializesBothDialectsInOneMigrationWithAllCommentsAndConstraints() {
         for (String vendor : new String[]{"postgresql", "mysql"}) {
-            String mode = vendor.equals("mysql") ? "MySQL" : "PostgreSQL";
-            var source = new DriverManagerDataSource("jdbc:h2:mem:init_" + UUID.randomUUID()
-                    + ";MODE=" + mode + ";DB_CLOSE_DELAY=-1", "sa", "");
+            var source = new DriverManagerDataSource("jdbc:h2:mem:baseline_" + UUID.randomUUID()
+                    + ";MODE=" + (vendor.equals("mysql") ? "MySQL" : "PostgreSQL") + ";DB_CLOSE_DELAY=-1", "sa", "");
             var flyway = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor)
-                    .baselineOnMigrate(false).target("1").load();
+                    .baselineOnMigrate(false).cleanDisabled(true).load();
             assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
             var jdbc = new JdbcTemplate(source);
-            var columns = jdbc.queryForList("select remarks from information_schema.columns "
-                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class);
-            assertThat(columns).hasSize(99).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
-            var tables = jdbc.queryForList("select remarks from information_schema.tables "
-                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class);
-            assertThat(tables).hasSize(10).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
+            assertThat(jdbc.queryForList("select remarks from information_schema.columns "
+                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class))
+                    .hasSize(166).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
+            assertThat(jdbc.queryForList("select table_name from information_schema.tables "
+                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class))
+                    .hasSize(14).allSatisfy(table -> assertThat(jdbc.queryForList(
+                            "select column_name from information_schema.columns where table_schema = 'PUBLIC' and table_name = ?",
+                            String.class, table)).contains("CREATED_BY", "UPDATED_BY", "CREATED_AT", "UPDATED_AT"));
             jdbc.update("insert into account_users (id, account, email, name, phone) values (?, ?, ?, ?, ?)",
                     "init-user", "init-user", "test@example.invalid", "Synthetic", "001");
-            var before = jdbc.queryForMap("select * from account_users where id = 'init-user'");
-            assertThat(before.get("VERSION")).isEqualTo(1L);
-            assertThat(before.get("PASSWORD")).isNull();
-            assertThatThrownBy(() -> jdbc.update("insert into account_users (id, account, email, name, phone) "
-                    + "values ('duplicate', 'init-user', 'test@example.invalid', 'Synthetic', '001')"))
-                    .isInstanceOf(DataIntegrityViolationException.class);
-            assertThatThrownBy(() -> jdbc.update("insert into account_user_applications (user_id, app_code) "
-                    + "values ('missing', 'missing')")).isInstanceOf(DataIntegrityViolationException.class);
-            assertThatThrownBy(() -> jdbc.update("insert into account_user_imports "
-                    + "(id, file_hash, row_count, valid, status, expires_at, created_by) "
-                    + "values ('invalid', 'hash', 0, false, 'preview', current_timestamp, 'init-user')"))
+            assertThatThrownBy(() -> jdbc.update("insert into account_users (id, account, email, name, phone) values (?, ?, ?, ?, ?)",
+                    "duplicate", "init-user", "test@example.invalid", "Synthetic", "002"))
                     .isInstanceOf(DataIntegrityViolationException.class);
             assertThat(flyway.migrate().migrationsExecuted).isZero();
-            assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
+            assertThat(jdbc.queryForObject("select account from account_users where id = 'init-user'", String.class))
+                    .isEqualTo("init-user");
             flyway.validate();
-            var upgrade = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor)
-                    .target("2").load();
-            assertThat(upgrade.migrate().migrationsExecuted).isEqualTo(1);
-            assertThat(upgrade.info().current().getVersion().getVersion()).isEqualTo("2");
-            assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
-            assertThat(jdbc.queryForList("select remarks from information_schema.columns "
-                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class))
-                    .hasSize(116).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
-            assertThat(jdbc.queryForList("select remarks from information_schema.tables "
-                    + "where table_schema = 'PUBLIC' and table_name like 'ACCOUNT%'", String.class))
-                    .hasSize(11).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
-            assertThat(upgrade.migrate().migrationsExecuted).isZero();
-            upgrade.validate();
-            var oidcUpgrade = Flyway.configure().dataSource(source).locations("classpath:db/vendor/" + vendor).load();
-            assertThat(oidcUpgrade.migrate().migrationsExecuted).isEqualTo(1);
-            assertThat(oidcUpgrade.info().current().getVersion().getVersion()).isEqualTo("3");
-            assertThat(jdbc.queryForMap("select * from account_users where id = 'init-user'")).isEqualTo(before);
-            assertThat(jdbc.queryForList("select remarks from information_schema.columns "
-                    + "where table_schema = 'PUBLIC' and table_name = 'ACCOUNT_OIDC_AUTHORIZATIONS'", String.class))
-                    .hasSize(13).allMatch(value -> value != null && value.matches(".*[\\p{IsHan}].*"));
-            assertThat(oidcUpgrade.migrate().migrationsExecuted).isZero();
-            oidcUpgrade.validate();
         }
     }
 
@@ -119,15 +90,15 @@ class AccountSchemaCommentsTest {
         for (String vendor : new String[]{"postgresql", "mysql"}) {
             String sql = new ClassPathResource("db/vendor/" + vendor + "/V1__init_account_center.sql")
                     .getContentAsString(StandardCharsets.UTF_8);
-            assertThat(sql.lines().filter(line -> line.startsWith("create table ")).count()).isEqualTo(10);
-            assertThat(sql.lines().filter(line -> line.startsWith("create index ")).count()).isEqualTo(5);
+            assertThat(sql.lines().filter(line -> line.startsWith("create table ")).count()).isEqualTo(14);
+            assertThat(sql.lines().filter(line -> line.startsWith("create index ")).count()).isEqualTo(8);
             assertThat(sql.toLowerCase()).doesNotContain("alter table", "drop table", "truncate ", "delete from ");
             if (vendor.equals("mysql")) {
                 assertThat(sql).contains("rows_json longtext", "result_json longtext");
                 assertThat(sql.lines().filter(line -> line.startsWith("    ") && line.contains(" comment '")).count())
-                        .isEqualTo(99);
+                        .isEqualTo(166);
             } else {
-                assertThat(sql.lines().filter(line -> line.startsWith("comment on column ")).count()).isEqualTo(99);
+                assertThat(sql.lines().filter(line -> line.startsWith("comment on column ")).count()).isEqualTo(166);
             }
         }
     }

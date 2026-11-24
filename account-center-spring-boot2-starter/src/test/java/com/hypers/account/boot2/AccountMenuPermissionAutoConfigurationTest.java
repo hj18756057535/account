@@ -1,6 +1,13 @@
 package com.hypers.account.boot2;
 
-import com.hypers.account.integration.menu.*;
+import com.hypers.account.integration.menu.AccountMenuPermissionHandler;
+import com.hypers.account.integration.menu.AccountMenuPermissionProtocol;
+import com.hypers.account.integration.menu.AccountNonceStore;
+import com.hypers.account.integration.menu.MenuPermissionQuery;
+import com.hypers.account.integration.menu.MenuPermissionReplaceCommand;
+import com.hypers.account.integration.menu.MenuPermissionSnapshot;
+import com.hypers.account.integration.menu.security.InMemoryAccountNonceStore;
+import com.hypers.account.integration.menu.web.AccountMenuPermissionController;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;

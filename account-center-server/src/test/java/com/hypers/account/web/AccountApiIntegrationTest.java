@@ -58,9 +58,8 @@ class AccountApiIntegrationTest {
                 + "\"entryUrl\":\"http://localhost:9003\","
                 + "\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\","
                 + "\"permissionIframeUrl\":\"http://localhost:9003/permissions\","
-                + "\"notifyBaseUrl\":\"http://localhost:9003/notify\","
-                + "\"defaultTenantCode\":\"default\","
-                + "\"protocolCapabilities\":[\"sso\",\"admin_ticket\",\"user_sync\"]}";
+                + "\"notifyBaseUrl\":\"\","
+                + "\"defaultTenantCode\":\"default\"}";
 
         MvcResult applicationResult = mockMvc.perform(post("/api/applications")
                         .session(managementSession)
@@ -94,9 +93,8 @@ class AccountApiIntegrationTest {
                 + "\"entryUrl\":\"http://localhost:9003\","
                 + "\"ssoCallbackUrl\":\"http://localhost:9003/account-sso/callback\","
                 + "\"permissionIframeUrl\":\"http://localhost:9003/permissions\","
-                + "\"notifyBaseUrl\":\"http://localhost:9003/notify\","
+                + "\"notifyBaseUrl\":\"\","
                 + "\"defaultTenantCode\":\"default\","
-                + "\"protocolCapabilities\":[\"sso\",\"admin_ticket\",\"user_sync\"],"
                 + "\"version\":1}";
         mockMvc.perform(put("/api/applications/cms-ai")
                         .session(managementSession)
@@ -181,13 +179,15 @@ class AccountApiIntegrationTest {
                         .header(CsrfTokenManager.HEADER_NAME, csrfToken)
                         .header("Idempotency-Key", "full-flow-enable-access")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"enabled\",\"version\":0,\"reason\":\"全流程开通\"}"))
+                        .content("{\"status\":\"enabled\",\"version\":0}"))
                 .andExpect(status().isAccepted());
 
-        mockMvc.perform(get("/api/users/" + userId + "/applications")
+        mockMvc.perform(get("/api/users/" + userId + "/application-access")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].appCode").value("cms-ai"));
+                .andExpect(jsonPath("$[0].appCode").value("cms-ai"))
+                .andExpect(jsonPath("$[0].desiredStatus").value("enabled"))
+                .andExpect(jsonPath("$[0].secret").doesNotExist());
 
         MvcResult ticketResult = mockMvc.perform(post("/api/sso/tickets")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
@@ -243,13 +243,13 @@ class AccountApiIntegrationTest {
                         .header(CsrfTokenManager.HEADER_NAME, csrfToken)
                         .header("Idempotency-Key", "full-flow-disable-access")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"disabled\",\"version\":1,\"reason\":\"全流程关闭\"}"))
+                        .content("{\"status\":\"disabled\",\"version\":1}"))
                 .andExpect(status().isAccepted());
 
-        mockMvc.perform(get("/api/users/" + userId + "/applications")
+        mockMvc.perform(get("/api/users/" + userId + "/application-access")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$[0].desiredStatus").value("disabled"));
     }
 
     private AccountSessionUser adminSession() {

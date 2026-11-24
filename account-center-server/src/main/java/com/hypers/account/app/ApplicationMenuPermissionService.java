@@ -97,9 +97,7 @@ public class ApplicationMenuPermissionService {
             AccountApplication application = directory.getApplication(appCode);
             ApplicationAccess access = directory.getUserApplicationAccess(userId, appCode);
             ApplicationUserState state = syncStore.state(userId, appCode);
-            boolean capability = application.getProtocolCapabilities() != null
-                    && java.util.Arrays.stream(application.getProtocolCapabilities().split(","))
-                    .map(String::trim).anyMatch(MenuPermissionProtocol.VERSION::equals);
+            boolean capability = application.hasProviderConfiguration();
             if (!"enabled".equals(user.getStatus()) || !"enabled".equals(application.getStatus())
                     || !"active".equals(application.getSecretState()) || !capability
                     || !"enabled".equals(access.getDesiredStatus())

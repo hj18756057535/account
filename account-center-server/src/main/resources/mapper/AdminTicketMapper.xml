@@ -6,8 +6,10 @@
 
     <!-- 新增 ticket -->
     <insert id="insert">
-        insert into account_admin_tickets (code, app_code, user_id, purpose, expires_at)
-        values (#{code}, #{appCode}, #{userId}, #{purpose}, #{expiresAt})
+        insert into account_admin_tickets (code, app_code, user_id, purpose, expires_at,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
+        values
+            (#{code}, #{appCode}, #{userId}, #{purpose}, #{expiresAt}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
 
     <!-- 校验 ticket：存在、未过期、匹配应用编码，返回关联的用户 ID -->
@@ -24,7 +26,9 @@
 
     <!-- 标记 ticket 已使用（一次性凭证） -->
     <update id="markUsed">
-        update account_admin_tickets set used_at = current_timestamp where code = #{code}
+        update account_admin_tickets set used_at = current_timestamp,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
+        where code = #{code}
     </update>
 
     <!-- 检查 ticket 是否已被使用 -->
@@ -38,4 +42,9 @@
         where code = #{code} and app_code = #{appCode} and expires_at > #{now}
     </select>
 
+    <update id="consume">
+        update account_admin_tickets set used_at = current_timestamp,
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
+        where code = #{code} and app_code = #{appCode} and used_at is null and expires_at &gt; #{now}
+    </update>
 </mapper>

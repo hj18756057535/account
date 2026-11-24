@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -16,6 +17,9 @@ class AdminTicketServiceTest {
 
     @Autowired
     private AdminTicketService ticketService;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void verifyReturnsPayloadForValidTicket() {
@@ -45,16 +49,9 @@ class AdminTicketServiceTest {
     }
 
     @Test
-    void verifyRejectsExpiredTicket() throws Exception {
-        // issue a ticket and wait for it to expire (TTL = 60s)
-        // Use a direct DB approach: issue ticket, then manually update expires_at to past
-        // Since we can't easily manipulate the clock in a @SpringBootTest, we test the happy path
-        // and trust the SQL condition (expires_at > now) handles expiry
+    void verifyRejectsExpiredTicket() {
         String code = ticketService.issue("cms-ai", "user-1", "iframe-permission");
-
-        // Verify the ticket is initially valid
-        AdminTicketPayload payload = ticketService.verify("cms-ai", code);
-        assertThat(payload).isNotNull();
-        assertThat(payload.getAppCode()).isEqualTo("cms-ai");
+        jdbc.update("update account_admin_tickets set expires_at = '2000-01-01 00:00:00' where code = ?", code);
+        assertThatThrownBy(() -> ticketService.verify("cms-ai", code)).isInstanceOf(IllegalArgumentException.class);
     }
 }

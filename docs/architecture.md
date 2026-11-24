@@ -41,7 +41,7 @@ account-center/                          # 父 POM (packaging: pom)
 │  Thymeleaf 页面  │  REST API (/api/)  │  OpenAPI (/openapi/) │
 ├─────────────────────────────────────────────────────────────┤
 │                    Controller 层 (web)                        │
-│  AccountDirectoryController │ SsoTicketController            │
+│  ManagementApplicationController │ SsoTicketController       │
 │  AuthController │ AdminTicketController │ AuditLogController │
 ├─────────────────────────────────────────────────────────────┤
 │                    Service 层                                 │

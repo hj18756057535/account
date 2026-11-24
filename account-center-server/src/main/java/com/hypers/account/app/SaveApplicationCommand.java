@@ -14,7 +14,6 @@ public class SaveApplicationCommand {
     private final String permissionIframeUrl;
     private final String notifyBaseUrl;
     private final String defaultTenantCode;
-    private final String protocolCapabilities;
     private final String secret;
     private final long expectedVersion;
 }

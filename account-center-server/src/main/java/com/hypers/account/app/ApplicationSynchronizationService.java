@@ -3,6 +3,7 @@ package com.hypers.account.app;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.audit.AuditLogService;
+import com.hypers.account.app.directory.DirectoryImportStore;
 import com.hypers.account.contract.application.AccountUserDesiredState;
 import com.hypers.account.contract.application.AccountUserSyncResult;
 import com.hypers.account.web.management.ApiException;
@@ -11,6 +12,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -38,6 +40,7 @@ public class ApplicationSynchronizationService {
     private final Clock clock;
     private final PlatformTransactionManager transactions;
     private final AuditLogService audit;
+    private final DirectoryImportStore directoryImports;
 
     // 写准入与处理回执统一按应用、准入、命令顺序加锁，网络调用不持有数据库事务。
     public void prepareChange(String appCode) {
@@ -69,14 +72,24 @@ public class ApplicationSynchronizationService {
             var access = store.lockAccess(userId, appCode);
             if (access == null) throw notFound();
             if (access.getVersion() != version) throw conflict();
-            var delivery = store.latest(userId, appCode, version);
-            if (delivery == null) throw conflict();
-            delivery = store.lock(delivery.getId());
-            if (!List.of("failed", "pending_application_adaptation").contains(delivery.getStatus())
-                    || delivery.getCreatedAt().plus(Duration.ofDays(7)).isBefore(clock.instant())) throw conflict();
             var app = directory.getApplication(appCode);
             try { policy.target(app); }
             catch (ApplicationSyncFailure error) { throw unavailable(error.getCode()); }
+            var delivery = store.latest(userId, appCode, version);
+            if (delivery == null) {
+                if (version >= 9007199254740991L) throw conflict();
+                String id = UUID.randomUUID().toString().replace("-", "");
+                var command = new ApplicationSyncCommand(id, id, userId, appCode, access.getDesiredStatus(),
+                        version + 1, "pending_application_adaptation", 0, id, clock.instant());
+                var scheduled = directory.changeUserApplicationAccess(userId, appCode, access.getDesiredStatus(),
+                        version, operator, command);
+                scheduled.setIntegrationStatus(created(id, operator));
+                audit.log(operator, "APPLICATION_SYNC_RETRIED", "USER_APPLICATION", userId + ":" + appCode, "{}");
+                return scheduled;
+            }
+            delivery = store.lock(delivery.getId());
+            if (!List.of("failed", "pending_application_adaptation").contains(delivery.getStatus())
+                    || delivery.getCreatedAt().plus(Duration.ofDays(7)).isBefore(clock.instant())) throw conflict();
             if (delivery.getOperatorId() == null) delivery.setOperatorId(operator);
             enqueue(delivery, app, true);
             audit.log(operator, "APPLICATION_SYNC_RETRIED", "USER_APPLICATION", userId + ":" + appCode, "{}");
@@ -87,7 +100,17 @@ public class ApplicationSynchronizationService {
     }
 
     public void decorate(ApplicationAccess access, AccountApplication app) {
-        access.setRetryable(app != null && access.getSyncCommandId() != null && policy.canDeliver(app)
+        if (access.getVersion() == 0) {
+            access.setIntegrationStatus("not_authorized");
+            access.setRetryable(false);
+            return;
+        }
+        if (app != null && !app.hasProviderConfiguration()) {
+            access.setIntegrationStatus("not_required");
+            access.setRetryable(false);
+            return;
+        }
+        access.setRetryable(app != null && access.getVersion() > 0 && policy.canDeliver(app)
                 && List.of("failed", "pending_application_adaptation").contains(access.getIntegrationStatus()));
         if ("succeeded".equals(access.getIntegrationStatus()) && (access.getAppliedVersion() == null
                 || access.getAppliedVersion() != access.getVersion()
@@ -112,13 +135,19 @@ public class ApplicationSynchronizationService {
         var user = directory.getUser(delivery.getUserId());
         if ("enabled".equals(delivery.getDesiredStatus()) && !"enabled".equals(user.getStatus()))
             throw unavailable("SYNC_USER_DISABLED");
-        store.enroll(app.getAppCode());
         if (delivery.getPayloadJson() == null) {
             var state = store.state(delivery.getUserId(), delivery.getAppCode());
+            var link = state == null ? directoryImports.link(delivery.getUserId(), delivery.getAppCode()) : null;
+            String tenant = app.getDefaultTenantCode() == null || app.getDefaultTenantCode().isBlank()
+                    ? "default" : app.getDefaultTenantCode();
+            if (link != null && !tenant.equals(link.getTenantCode())) {
+                throw unavailable("SYNC_IDENTITY_CONFLICT");
+            }
+            String localUserId = state == null ? (link == null ? null : link.getLocalUserId()) : state.getLocalUserId();
             var payload = AccountUserDesiredState.builder().appCode(delivery.getAppCode())
-                    .globalUserId(delivery.getUserId()).localUserId(state == null ? null : state.getLocalUserId())
+                    .globalUserId(delivery.getUserId()).localUserId(localUserId)
                     .account(user.getAccount()).displayName(user.getName()).email(user.getEmail()).phone(user.getPhone())
-                    .tenantCode(app.getDefaultTenantCode()).desiredStatus(delivery.getDesiredStatus())
+                    .tenantCode(tenant).desiredStatus(delivery.getDesiredStatus())
                     .syncVersion(delivery.getSyncVersion()).occurredAt(delivery.getCreatedAt()).build();
             try { delivery.setPayloadJson(json.writeValueAsString(payload)); }
             catch (JsonProcessingException error) { throw new IllegalStateException("Cannot serialize sync payload", error); }
@@ -133,7 +162,8 @@ public class ApplicationSynchronizationService {
         delivery.setErrorCode(null);
         delivery.setLeaseToken(null);
         delivery.setLeaseExpiresAt(null);
-        delivery.setNextRetryAt(clock.instant());
+        // 数据库 timestamp 会舍入纳秒；首次立即投递不能被舍入成略晚于当前时钟的未来时间。
+        delivery.setNextRetryAt(clock.instant().truncatedTo(ChronoUnit.MILLIS));
         delivery.setUpdatedAt(clock.instant());
         store.save(delivery);
     }
@@ -246,7 +276,9 @@ public class ApplicationSynchronizationService {
             terminal(current, "failed", "SYNC_TARGET_CHANGED"); return;
         }
         var state = store.state(current.getUserId(), current.getAppCode());
-        if (state != null && !state.getLocalUserId().equals(result.getLocalUserId())) {
+        var sourceLink = directoryImports.link(current.getUserId(), current.getAppCode());
+        if (state != null && !state.getLocalUserId().equals(result.getLocalUserId())
+                || sourceLink != null && !sourceLink.getLocalUserId().equals(result.getLocalUserId())) {
             terminal(current, "failed", "SYNC_IDENTITY_CONFLICT"); return;
         }
         boolean create = state == null;

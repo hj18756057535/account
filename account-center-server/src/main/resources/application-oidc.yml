@@ -18,6 +18,5 @@ account:
     access-token-ttl: 5m
     clients:
       agent:
-        secret-hash: ${ACCOUNT_OIDC_AGENT_SECRET_HASH}
         post-logout-redirect-uris:
           - ${ACCOUNT_OIDC_AGENT_POST_LOGOUT_REDIRECT_URI}

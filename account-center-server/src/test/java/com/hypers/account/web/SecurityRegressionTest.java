@@ -206,7 +206,7 @@ class SecurityRegressionTest {
                 "http://localhost:9003",
                 callbackUrl,
                 "http://localhost:9003/permissions",
-                "http://localhost:9003",
+                "",
                 "secret-" + appCode,
                 "default"));
     }
@@ -221,8 +221,7 @@ class SecurityRegressionTest {
                 + "\"ssoCallbackUrl\":\"http://localhost:9003/callback\","
                 + "\"permissionIframeUrl\":\"http://localhost:9003/permissions\","
                 + "\"notifyBaseUrl\":\"" + notifyBaseUrl + "\","
-                + "\"defaultTenantCode\":\"default\","
-                + "\"protocolCapabilities\":[\"sso\"]}";
+                + "\"defaultTenantCode\":\"default\"}";
     }
 
     private ManagementSession managementSession() throws Exception {

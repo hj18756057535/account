@@ -1,8 +1,5 @@
 package com.hypers.account.config;
 
-import java.net.URI;
-import java.util.HashMap;
-import java.util.Map;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @Getter
 @Setter
 public class ApplicationSyncProperties {
+    /** 全局投递和目录调用开关，默认开启；具体服务地址由应用管理页面登记。 */
     private boolean enabled = true;
-    private Map<String, URI> targets = new HashMap<>();
+
 }

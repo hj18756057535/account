@@ -48,7 +48,6 @@ class ManagedApplicationSyncTransportTest {
     void enablesReliableDeliveryByDefaultWithoutInventingTargets() {
         var defaults = new ApplicationSyncProperties();
         assertThat(defaults.isEnabled()).isTrue();
-        assertThat(defaults.getTargets()).isEmpty();
     }
 
     @BeforeEach
@@ -74,7 +73,7 @@ class ManagedApplicationSyncTransportTest {
         String base = "http://127.0.0.1:" + server.getAddress().getPort();
         properties = new ApplicationSyncProperties();
         properties.setEnabled(true);
-        properties.getTargets().put("app-1", URI.create(base));
+
         environment = new MockEnvironment();
         environment.setActiveProfiles("test");
         policy = new ApplicationSyncPolicy(properties, environment);
@@ -141,23 +140,23 @@ class ManagedApplicationSyncTransportTest {
     }
 
     @Test
-    void requiresExplicitMatchingTargetAndAllowsHttpOnlyForLiteralLoopbackInTests() {
+    void usesRegisteredTargetAndAllowsLiteralLoopbackWithoutATestProfile() {
         environment.setActiveProfiles("production");
-        assertThat(policy.canDeliver(app)).isFalse();
+        assertThat(policy.canDeliver(app)).isTrue();
         environment.setActiveProfiles("test");
         assertThat(policy.canDeliver(app)).isTrue();
         properties.setEnabled(false);
         assertThat(policy.canDeliver(app)).isFalse();
         properties.setEnabled(true);
-        for (String target : List.of("http://localhost", "https://user@example.invalid", "https://example.invalid?a=1",
+        for (String target : List.of("http://public.example.invalid", "https://user@example.invalid", "https://example.invalid?a=1",
                 "https://example.invalid#fragment", "https://example.invalid/a/../b", "https://example.invalid/%61")) {
             app.setNotifyBaseUrl(target);
-            properties.getTargets().put("app-1", URI.create(target));
+
             assertThat(policy.canDeliver(app)).as(target).isFalse();
         }
-        properties.getTargets().put("app-1", URI.create("https://example.invalid"));
+
         app.setNotifyBaseUrl("https://different.invalid");
-        assertThat(policy.canDeliver(app)).isFalse();
+        assertThat(policy.canDeliver(app)).isTrue();
     }
 
     @Test

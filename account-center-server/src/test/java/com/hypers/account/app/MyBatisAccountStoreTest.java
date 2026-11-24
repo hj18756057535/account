@@ -37,8 +37,7 @@ class MyBatisAccountStoreTest {
                 "http://localhost:9003",
                 "http://localhost:9003/account-sso/callback",
                 "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003",
-                "secret",
+                "", "secret",
                 "default"));
         AccountUser user = store.saveNewUser(new SaveUserCommand(
                 "zhangsan",

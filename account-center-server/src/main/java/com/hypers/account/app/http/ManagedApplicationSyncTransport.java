@@ -7,6 +7,7 @@ import com.hypers.account.app.ApplicationSyncFailure;
 import com.hypers.account.app.ApplicationSyncPolicy;
 import com.hypers.account.app.ApplicationSyncTransport;
 import com.hypers.account.contract.AccountIntegrationHeaders;
+import com.hypers.account.contract.AccountProviderProtocol;
 import com.hypers.account.contract.AccountIntegrationPaths;
 import com.hypers.account.contract.application.AccountUserSyncResult;
 import com.hypers.account.security.HmacSignatureService;
@@ -51,6 +52,7 @@ public class ManagedApplicationSyncTransport implements ApplicationSyncTransport
         var request = HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(5))
                 .header("Content-Type", "application/json")
                 .header(AccountIntegrationHeaders.APP_CODE, delivery.getAppCode())
+                .header(AccountIntegrationHeaders.PROTOCOL_VERSION, AccountProviderProtocol.VERSION)
                 .header(AccountIntegrationHeaders.IDEMPOTENCY_KEY, delivery.getIdempotencyKey())
                 .header(AccountIntegrationHeaders.TIMESTAMP, timestamp)
                 .header(AccountIntegrationHeaders.NONCE, nonce)

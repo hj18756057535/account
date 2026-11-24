@@ -1,2 +1,4 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-com.hypers.account.boot2.AccountMenuPermissionAutoConfiguration
+com.hypers.account.boot2.AccountMenuPermissionAutoConfiguration,\
+com.hypers.account.boot2.AccountProviderAutoConfiguration,\
+com.hypers.account.boot2.oidc.AccountOidcAutoConfiguration

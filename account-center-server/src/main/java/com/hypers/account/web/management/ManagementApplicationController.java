@@ -19,7 +19,6 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -270,7 +269,7 @@ public class ManagementApplicationController {
         }
     }
 
-    private ApiException validation(String field, String message) {
+    private static ApiException validation(String field, String message) {
         return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
                 "VALIDATION_FAILED", "error.validation",
                 Collections.singletonMap(field, message));
@@ -312,48 +311,24 @@ public class ManagementApplicationController {
         @NotBlank(message = "validation.appName.required")
         @Size(max = 128, message = "validation.appName.size")
         private String name;
-        @NotBlank(message = "validation.entryUrl.required")
         @Size(max = 512, message = "validation.entryUrl.size")
         private String entryUrl;
-        @NotBlank(message = "validation.callback.required")
         @Size(max = 512, message = "validation.callback.size")
         private String ssoCallbackUrl;
-        @NotBlank(message = "validation.permissionUrl.required")
         @Size(max = 512, message = "validation.permissionUrl.size")
         private String permissionIframeUrl;
-        @NotBlank(message = "validation.notifyUrl.required")
         @Size(max = 512, message = "validation.notifyUrl.size")
         private String notifyBaseUrl;
         @Size(max = 64, message = "validation.tenant.size")
         private String defaultTenantCode;
-        @NotEmpty(message = "validation.protocol.notEmpty")
-        @Size(max = 4, message = "validation.protocol.size")
-        private List<@NotNull(message = "validation.protocol.required")
-                @Pattern(regexp = "sso|admin_ticket|user_sync|menu_permission_v1",
-                        message = "validation.protocol.supported") String>
-                protocolCapabilities;
 
         protected SaveApplicationCommand toCommand(String appCode, long version) {
-            if (new java.util.HashSet<>(protocolCapabilities).size() != protocolCapabilities.size()) {
-                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "VALIDATION_FAILED", "error.validation",
-                        Collections.singletonMap("protocolCapabilities", "validation.protocol.unique"));
-            }
-            String protocols = protocolCapabilities.stream()
-                    .distinct()
-                    .sorted()
-                    .collect(Collectors.joining(","));
-            return new SaveApplicationCommand(
-                    appCode,
-                    name.trim(),
-                    entryUrl.trim(),
-                    ssoCallbackUrl.trim(),
-                    permissionIframeUrl.trim(),
-                    notifyBaseUrl.trim(),
-                    defaultTenantCode == null ? null : defaultTenantCode.trim(),
-                    protocols,
-                    null,
-                    version);
+            return new SaveApplicationCommand(appCode, name.trim(),
+                    entryUrl == null ? "" : entryUrl.trim(),
+                    ssoCallbackUrl == null ? "" : ssoCallbackUrl.trim(),
+                    permissionIframeUrl == null ? "" : permissionIframeUrl.trim(),
+                    notifyBaseUrl == null ? "" : notifyBaseUrl.trim(),
+                    defaultTenantCode == null ? null : defaultTenantCode.trim(), null, version);
         }
     }
 
@@ -377,9 +352,6 @@ public class ManagementApplicationController {
         @Min(value = 0, message = "validation.version.nonnegative")
         private Long version;
         private boolean confirmPermissionReuse;
-        @NotBlank(message = "validation.reason.required")
-        @Size(max = 256, message = "validation.reason.size")
-        private String reason;
     }
 
     @Getter
@@ -413,6 +385,8 @@ public class ManagementApplicationController {
         List<String> protocolCapabilities;
         Instant createdAt;
         Instant updatedAt;
+        String createdBy;
+        String updatedBy;
 
         public static ApplicationResponse from(AccountApplication application) {
             List<String> protocols = application.getProtocolCapabilities() == null
@@ -425,7 +399,8 @@ public class ManagementApplicationController {
                     application.getSsoCallbackUrl(), application.getPermissionIframeUrl(),
                     application.getNotifyBaseUrl(), application.getDefaultTenantCode(),
                     application.getStatus(), application.getVersion(), application.getSecretVersion(),
-                    application.getSecretState(), protocols, application.getCreatedAt(), application.getUpdatedAt());
+                    application.getSecretState(), protocols, application.getCreatedAt(), application.getUpdatedAt(),
+                    application.getCreatedBy(), application.getUpdatedBy());
         }
     }
 

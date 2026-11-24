@@ -1,6 +1,6 @@
 # Account Center
 
-内部统一账户中心，提供用户管理、应用准入授权和 SSO 单点登录能力。
+内部统一账户中心，提供用户管理、应用准入授权和 SSO 单点登录能力。当前尚未投入使用，直接维护最新模型与初始化 SQL，不为未发布版本增加兼容层。
 
 标准 OIDC 已接入 Spring 官方授权服务器，支持授权码 + PKCE S256，默认关闭；启用配置见 [OIDC 运行指南](docs/oidc-integration.md)，Agent 开发见 [SSO 对接说明](../docs/application-integration/Agent平台-SSO对接说明.md)。
 
@@ -27,10 +27,12 @@
 
 客户用户接口本期仅保留适配设计，未实际接入客户环境；Excel 不依赖客户接口。
 
-- 后端中英支持覆盖管理 API、旧票据/签名错误、框架兜底及登录/SSO 模板；Starter 集成错误也支持 Accept-Language。只翻译展示消息，业务编码、数据和签名保持不变；未知内部错误不直接返回给调用方。SSR 页面使用浏览器请求语言，不读取 Vue 的 localStorage。
+- Server 的管理 API、旧票据/签名错误、兜底及登录/SSO 模板支持简体中文、繁体中文、英文、越南语；Starter 的集成错误保留现有中英支持。只翻译展示消息，业务编码、数据和签名保持不变；未知内部错误不直接返回给调用方。SSR 页面使用浏览器请求语言，不读取 Vue 的 localStorage。
+
+- 统一审计由 `audit/AuditMetadataProvider`、`AuditSqlInterceptor` 和 `mapper/AuditFields.xml` 提供；业务 INSERT 引用 `insertColumns/insertValues`，UPDATE 引用 `updateFields`。SQL 绑定前从可信会话或内部命令填入参数，无操作人时记录 system；不接收前端审计字段，更新不覆盖创建字段。内存 Store 使用同一填充器。最新 V1 直接包含全部审计字段，不保留历史回填。
 
 - 需求正文统一保存在工作区 `requirements/features/ACCOUNT-001/requirement.md`；当前待办、授权来源和验证边界见 [工作区计划](../docs/account-center/账号中心-计划.md)，既有规格、设计与审批按需追溯。保留 [架构说明](docs/architecture.md)、[接入指南](docs/integration-guide.md) 与 [菜单权限联调说明](docs/menu-permission-integration.md)。
-- 数据库现采用完整初始化基线：[PostgreSQL SQL](account-center-server/src/main/resources/db/vendor/postgresql/V1__init_account_center.sql)、[MySQL SQL](account-center-server/src/main/resources/db/vendor/mysql/V1__init_account_center.sql)。每份包含 10 张表、99 个字段、约束、索引及全部数据库注释，不再保留旧 V1～V8 拆分脚本或重复 schema.sql。
+- 数据库现采用完整初始化基线：[PostgreSQL SQL](account-center-server/src/main/resources/db/vendor/postgresql/V1__init_account_center.sql)、[MySQL SQL](account-center-server/src/main/resources/db/vendor/mysql/V1__init_account_center.sql)。每份包含 14 张表、166 个字段、约束、索引及全部数据库注释，不再保留未发布的增量脚本或重复 schema.sql。
 - **仅用于空库**：开发者已确认当前为可重建测试库。先停止旧应用并自行备份/处理数据，提供空数据库或空 schema（旧业务表与旧 flyway_schema_history 均不能残留）；清理旧构建产物后启动，新代码按数据库类型只执行对应 V1，并由 Flyway 自动记录历史。不要同时手工执行 SQL 和应用自动初始化；SQL 文件可直接审阅，默认交给 Flyway 执行。
 - 代码强制关闭自动 baseline、禁止 Flyway clean，不自动清库，不兼容旧迁移历史；发现旧库时停止并检查，不使用 repair 忽略差异。若选择手工执行 SQL，需另行正确建立版本 1 的 Flyway baseline，不要伪造历史记录。临时 sql/init.sql 不作为入口，也不参与构建。
 - PostgreSQL/MySQL 实库仍需开发者验证。新基线无旧数据回填或降级 SQL；恢复旧应用须同时恢复对应的数据库备份与旧迁移历史。后续正式使用后保持迁移不可变，只新增版本。
@@ -39,12 +41,14 @@
 
 - **用户管理** — 用户 CRUD、启用/禁用、按关键字搜索
 - **应用管理** — 应用注册、配置更新、密钥轮换、启用/禁用
-- **授权管理** — 用户-应用授权/取消授权，授权时自动同步用户到应用
+- **授权管理** — 用户-应用授权/取消授权，不填写理由；已配置后端地址的应用在授权后投递同步，匹配回执才表示生效
 - **SSO 单点登录** — 标准 OIDC 授权码 + PKCE（显式启用），保留历史 ticket 接口
 - **应用同步** — 通过 HMAC 签名的 HTTP POST 通知应用用户变更
 - **管理 ticket** — iframe 授权页面的短期凭证（60 秒，一次性）
 - **审计日志** — 记录所有关键管理操作
-- **管理后台** — Thymeleaf 页面，支持用户/应用/授权/日志管理
+- **管理后台** — Vue 控制台，支持用户/应用/授权/目录/日志管理；Thymeleaf 仅保留登录和 SSO 错误页
+
+应用登记仅要求编码、名称。SSO 回调、后端服务地址、权限 iframe 按需填写：回调提供 SSO，后端地址提供目录/用户同步/菜单接口，iframe 地址提供管理 Ticket；未配置的功能不处理。协议能力是只读派生信息，不接收能力勾选或单独启停。应用整体状态和 Secret 状态继续控制访问。
 
 ## 快速开始
 
@@ -188,4 +192,4 @@ Spring Boot 业务应用引入 `account-center-spring-boot-starter` 即可同时
 
 ## 老项目 Maven 接入
 
-Java 8/11、Spring Boot 2 应用使用独立 [Boot 2 Starter](account-center-spring-boot2-starter/README.md)，通过本地 Maven 安装，无需复制公共源码；当前提供菜单权限 Provider。Java 21/Boot 3 继续使用原 Starter。
+Java 8/11、Spring Boot 2 应用使用独立 [Boot 2 Starter](account-center-spring-boot2-starter/README.md)，通过本地 Maven 安装，提供标准 OIDC 登录客户端和菜单权限 Provider。Java 21/Boot 3 使用原 Starter。

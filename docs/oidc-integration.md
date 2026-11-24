@@ -1,11 +1,11 @@
 # Account 标准 OIDC 运行与接入
 
-更新日期：2026-11-18。协议端点使用 Spring Authorization Server 1.5.8，由现有 Boot 3.5.16 管理版本。
+更新日期：2026-11-24。协议端点使用 Spring Authorization Server 1.5.8，由现有 Boot 3.5.16 管理版本。应用和当前 Secret 改由管理页面维护，替代逐客户端 Secret 摘要配置。
 本轮实现授权码 + PKCE S256、专用客户端认证、Discovery、JWKS、UserInfo 和 RP-Initiated Logout；功能/工具 RBAC、来源系统会话桥接和多实例共享会话仍是后续范围。
 
 ## 启用方式
 
-推荐使用 [内网 OIDC 快速接入](../../docs/application-integration/内网OIDC快速接入.md)：执行 `pwsh -NoProfile -File scripts/Initialize-Oidc.ps1`，自动准备持久化密钥、客户端凭据及两端配置；后续改地址保留已有凭据。下面的环境变量方式继续用于手工部署。
+CMS 当前页面接入流程见 [部署对接方案](../../docs/application-integration/CMS接入-部署对接方案.md)。`Initialize-Oidc.ps1` 可以准备或复用持久化签名材料；历史生成的客户端 Secret/摘要不再替代应用页面当前 Secret。下面的环境变量方式用于全局签名与 issuer 配置。
 
 默认不开启。手工部署时先配置测试数据库，登记应用并授权测试用户，再设置下列 OIDC 环境变量，以 oidc profile 启动；准备脚本生成的配置可直接加载。
 配置入口：[application-oidc.yml](../account-center-server/src/main/resources/application-oidc.yml)。
@@ -17,11 +17,10 @@
 | ACCOUNT_OIDC_KEY_STORE | 持久化 PKCS12 Resource，如 file:D:/account-secrets/oidc-signing.p12 |
 | ACCOUNT_OIDC_KEY_STORE_PASSWORD | PKCS12 密码，安全配置 |
 | ACCOUNT_OIDC_SIGNING_KEY_ALIAS | 当前 RSA 签名私钥别名，同时作为 kid |
-| ACCOUNT_OIDC_AGENT_SECRET_HASH | Agent 专用客户端密钥的 {bcrypt} 摘要，安全配置 |
 | ACCOUNT_OIDC_AGENT_POST_LOGOUT_REDIRECT_URI | 精确登记的 Agent 退出回调 |
 | ACCOUNT_SESSION_COOKIE_SECURE | HTTPS 使用 true；本机或已选择的内网 HTTP 使用 false，准备工具自动生成 |
 
-示例 profile 固定 client_id / appCode 为 agent；其他应用在安全配置中增加 account.oidc.clients.<appCode> 条目。
+示例 profile 中的 agent 条目仅演示可选的退出回调；其他应用不用新增客户端配置条目。
 client_id 必须是已有 Account 应用编码。登录回调直接使用该应用登记的 ssoCallbackUrl，不另存一份重复回调。
 退出回调来自客户端配置。HTTPS 可以使用固定 IP；本机 HTTP 默认允许，私有 IP HTTP 需显式打开内网兼容开关，公网 HTTP 仍拒绝。内网 HTTP 放宽了规范的 HTTPS 传输要求，客户端需接受该环境的兼容设置。
 
@@ -41,29 +40,27 @@ client_id 必须是已有 Account 应用编码。登录回调直接使用该应�
 JWKS 只公开公钥；当前别名用于签名，其他别名只提供历史公钥。先发布新公钥再切换签名，旧公钥保留到相关 Token 全部失效。
 RSA 私钥、PKCS12 密码不得提交到仓库或经管理接口返回。
 
-Agent 后端持有专用随机 client_secret；Account 配置其 BCrypt 摘要：
-`"{bcrypt}" + new BCryptPasswordEncoder().encode(rawSecret)`
-可用经过批准的本地密码工具/标准库生成并安全交付；不要把明文放入文档、命令历史或模型上下文。
-OIDC Secret 与应用原有 HMAC Secret 独立；轮换 OIDC Secret 需要更新安全配置并重载服务，旧 Secret 不再接受。
+应用管理页创建或轮换时一次显示的 Secret 即客户端 `client_secret`，也用于该应用的 HMAC 服务接入。Account 在客户端认证时使用当前值生成 BCrypt 认证值；`clients.<app>.secret-hash` 不再参与认证，无需人工生成或复制摘要。
+轮换或撤销实时影响后续客户端认证；更新客户端保存的 Secret 并重启客户端后再连接。签名文件和签名密码仍是 Account 独立的全局配置，不能使用应用 Secret 替代。
 
-Account 客户端适配器实时读取数据库中的应用状态、名称和回调；OIDC 密钥摘要与退出回调来自持久的外部配置。
+Account 客户端适配器实时读取数据库中的应用状态、名称、回调和可用 Secret；填写 SSO 回调即可提供登录，不另设能力开关。可选退出回调仍来自外部配置。
 不开放动态客户端注册。client_secret_basic + authorization_code + openid/profile 为当前支持的客户端组合，强制 S256 PKCE，不提供 refresh_token 或 client_credentials。
 
 ## 应用准入规则
 
 在现有应用管理中登记 Agent、回调和用户准入：
-- 只接标准登录的应用将 protocolCapabilities 配为 sso，无需用户同步 Provider。
-- 如果应用已启用托管同步且声明 user_sync，保留现有“准入期望状态 + 同步回执确认”条件。
+- 只接标准登录的应用填写 SSO 回调，后端服务地址留空；不生成用户同步命令。
+- 填写后端服务地址的应用使用“准入期望状态 + 当前版本同步回执确认”条件。
 - OIDC 在授权、兑换和 UserInfo 时检查用户/应用启用状态及当前准入，撤权后后续请求拒绝。
 
-表结构和授权编排接口不因协议接入改变。对于纯 OIDC 应用，即使历史同步状态尚未确认，也以 Account 的有效准入期望状态为依据；不制造 localUserId 或虚假的 Provider 回执。
+纯 OIDC 应用以 Account 的有效准入期望状态为依据，不制造 localUserId 或虚假的 Provider 回执。授权和撤权无需理由，审计自动记录。
 当前不提供 Agent 功能/工具授权查询接口，OIDC 登录成功不意味着工具可执行；该 RBAC 切片尚待实现。
 
 ## 持久化与会话
 
-Flyway 新增两种方言的 V3__add_oidc_authorizations.sql，不修改已有 V1/V2。
+当前系统尚未使用，OIDC 表已包含在两种方言的最新 V1 初始化中，不保留未发布版本的迁移或历史兼容。开发者提供空库初始化，应用不自动清库。
 account_oidc_authorizations 保存官方协议对象所需的内部载荷和 token 查找摘要；载荷包含敏感凭据，仅服务端访问，不进入日志或管理响应。
-不要启用该 Mapper 的明文 SQL 参数日志。关闭 OIDC 时保留 V3 表和数据，不自动删除或改写迁移历史；Agent 后续登录按标准错误处理，不回退到相信来源用户资料。
+不要启用该 Mapper 的明文 SQL 参数日志。关闭 OIDC 时保留授权表和数据；Agent 后续登录按标准错误处理，不相信未经验证的来源用户资料。
 Store/MyBatis 实现官方 OAuth2AuthorizationService SPI，官方引擎负责协议校验、Token 生成和重放处理，避免复制协议 Controller。
 用原子条件更新确保并发兑换只有一个结果能保存并返回；重放仍按官方逻辑使已发出的授权失效。
 

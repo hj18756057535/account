@@ -1,6 +1,7 @@
 package com.hypers.account.app;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 数据访问契约接口。
@@ -14,6 +15,10 @@ public interface AccountStore {
     List<String> findExistingAccounts(List<String> accounts);
 
     List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, String operatorId);
+
+    List<AccountUser> saveNewUsers(List<SaveUserCommand> commands, Set<String> disabledAccounts, String operatorId);
+
+    List<AccountUser> findUsersByAccountsOrIds(List<String> accounts, List<String> ids);
 
     AccountUser saveNewUser(SaveUserCommand command);
 

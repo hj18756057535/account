@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /** 离线准备配置，不启动 Spring，不连接数据库，不输出凭据。 */
 public final class OidcSetup {
@@ -100,10 +99,6 @@ public final class OidcSetup {
                 keys.load(input, storePassword.toCharArray());
             }
             if (!keys.isKeyEntry(signingAlias)) throw new IllegalArgumentException("Missing signing key");
-            if (!new BCryptPasswordEncoder().matches(secret,
-                    server.getProperty("account.oidc.clients." + clientId + ".secret-hash", "").replaceFirst("^\\{bcrypt}", ""))) {
-                throw new IllegalArgumentException("Client credentials do not match");
-            }
         } else {
             createKeyStore(keyFile, storePassword);
         }
@@ -120,8 +115,6 @@ public final class OidcSetup {
             int port = URI.create(issuer).getPort();
             server.setProperty("server.port", Integer.toString(port < 0 ? 80 : port));
         }
-        if (!existing) server.setProperty("account.oidc.clients." + clientId + ".secret-hash",
-                "{bcrypt}" + new BCryptPasswordEncoder().encode(secret));
         server.setProperty("account.oidc.clients." + clientId + ".post-logout-redirect-uris[0]", logout);
         client.put("issuer", issuer);
         client.put("server_metadata_url", issuer + "/.well-known/openid-configuration");
@@ -138,9 +131,8 @@ public final class OidcSetup {
         var registration = JSON.createObjectNode();
         registration.put("appCode", clientId).put("name", "Agent")
                 .put("entryUrl", agent).put("ssoCallbackUrl", callback)
-                .put("permissionIframeUrl", agent + "/permissions").put("notifyBaseUrl", agent)
+                .put("permissionIframeUrl", "").put("notifyBaseUrl", "")
                 .put("defaultTenantCode", "default");
-        registration.putArray("protocolCapabilities").add("sso");
         secureFile(serverFile);
         try (var writer = Files.newBufferedWriter(serverFile, StandardCharsets.UTF_8)) {
             server.store(writer, "Private OIDC configuration. Do not commit or print.");

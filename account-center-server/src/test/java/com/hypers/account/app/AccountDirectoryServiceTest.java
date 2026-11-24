@@ -3,135 +3,70 @@ package com.hypers.account.app;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class AccountDirectoryServiceTest {
-
     @Test
-    void userIsSyncedOnlyAfterApplicationAuthorizationAndUpdatesReachAuthorizedApps() {
-        RecordingSyncClient syncClient = new RecordingSyncClient();
-        AccountDirectoryService service = new AccountDirectoryService(new InMemoryAccountStore(), syncClient);
-        AccountApplication application = service.registerApplication(new RegisterApplicationCommand(
-                "cms-ai", "双碳服务", "http://localhost:9003",
-                "http://localhost:9003/account-sso/callback",
-                "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003", "secret", "default"));
-
-        AccountUser user = service.createUser(new SaveUserCommand("zhangsan", "zhangsan@example.com", "张三", "13800000000"));
-
-        assertThat(syncClient.events).isEmpty();
-
-        service.authorize(user.getId(), application.getAppCode());
-
-        assertThat(syncClient.events).containsExactly("upsert:cms-ai:zhangsan:default");
-
-        service.updateUser(user.getId(), new SaveUserCommand("zhangsan", "new@example.com", "张三三", "13800000000"));
-
-        assertThat(syncClient.events).containsExactly(
-                "upsert:cms-ai:zhangsan:default",
-                "upsert:cms-ai:zhangsan:default");
-    }
-
-    @Test
-    void deauthorizingApplicationDisablesUserInThatApplication() {
-        RecordingSyncClient syncClient = new RecordingSyncClient();
-        AccountDirectoryService service = new AccountDirectoryService(new InMemoryAccountStore(), syncClient);
-        service.registerApplication(new RegisterApplicationCommand(
-                "cms-ai", "双碳服务", "http://localhost:9003",
-                "http://localhost:9003/account-sso/callback",
-                "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003", "secret", "default"));
-        AccountUser user = service.createUser(new SaveUserCommand("zhangsan", "zhangsan@example.com", "张三", "13800000000"));
+    void creatingUsersDoesNotGrantApplicationsAndUnconfiguredApplicationsDoNotSynchronize() {
+        var service = new AccountDirectoryService(new InMemoryAccountStore());
+        service.registerApplication(application(""));
+        var user = service.createUser(new SaveUserCommand("alice", "alice@example.com", "Alice", "123"));
+        assertThat(service.isAuthorized(user.getId(), "cms-ai")).isFalse();
         service.authorize(user.getId(), "cms-ai");
-
+        assertThat(service.isAuthorized(user.getId(), "cms-ai")).isTrue();
+        service.updateUser(user.getId(), new SaveUserCommand("alice", "alice@example.com", "Changed", "123"));
+        assertThat(service.getUser(user.getId()).getName()).isEqualTo("Changed");
         service.deauthorize(user.getId(), "cms-ai");
-
-        assertThat(syncClient.events).contains("disable:cms-ai:zhangsan:default");
+        assertThat(service.isAuthorized(user.getId(), "cms-ai")).isFalse();
     }
 
     @Test
-    void disablingApplicationPreventsAuthorization() {
-        RecordingSyncClient syncClient = new RecordingSyncClient();
-        AccountDirectoryService service = new AccountDirectoryService(new InMemoryAccountStore(), syncClient);
-        service.registerApplication(new RegisterApplicationCommand(
-                "cms-ai", "双碳服务", "http://localhost:9003",
-                "http://localhost:9003/account-sso/callback",
-                "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003", "secret", "default"));
-        AccountUser user = service.createUser(new SaveUserCommand("zhangsan", "zhangsan@example.com", "张三", "13800000000"));
-        service.disableApplication("cms-ai");
-
-        assertThatThrownBy(() -> service.authorize(user.getId(), "cms-ai"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("disabled");
-    }
-
-    @Test
-    void disablingUserSyncsDisableToAllAuthorizedApplications() {
-        RecordingSyncClient syncClient = new RecordingSyncClient();
-        AccountDirectoryService service = new AccountDirectoryService(new InMemoryAccountStore(), syncClient);
-        service.registerApplication(new RegisterApplicationCommand(
-                "cms-ai", "双碳服务", "http://localhost:9003",
-                "http://localhost:9003/account-sso/callback",
-                "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003", "secret", "default"));
-        AccountUser user = service.createUser(new SaveUserCommand("zhangsan", "zhangsan@example.com", "张三", "13800000000"));
+    void disabledUsersCannotUseGrantedApplications() {
+        var service = new AccountDirectoryService(new InMemoryAccountStore());
+        service.registerApplication(application(""));
+        var user = service.createUser(new SaveUserCommand("alice", "alice@example.com", "Alice", "123"));
         service.authorize(user.getId(), "cms-ai");
-        syncClient.events.clear();
-
         service.disableUser(user.getId());
-
-        assertThat(syncClient.events).containsExactly("disable:cms-ai:zhangsan:default");
+        assertThat(service.isAuthorized(user.getId(), "cms-ai")).isFalse();
     }
 
     @Test
-    void rotateSecretGeneratesNewSecretAndIncrementsVersion() {
-        AccountDirectoryService service = new AccountDirectoryService(new InMemoryAccountStore(), new RecordingSyncClient());
-        service.registerApplication(new RegisterApplicationCommand(
-                "cms-ai", "双碳服务", "http://localhost:9003",
-                "http://localhost:9003/account-sso/callback",
-                "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003", "secret", "default"));
-
-        String newSecret = service.rotateApplicationSecret("cms-ai");
-
-        assertThat(newSecret).isNotBlank().isNotEqualTo("secret");
-        AccountApplication app = service.getApplication("cms-ai");
-        assertThat(app.getSecret()).isEqualTo(newSecret);
-        assertThat(app.getSecretVersion()).isEqualTo(2);
+    void configuredProvidersRequireTheConfirmedAuthorizationWorkflow() {
+        var service = new AccountDirectoryService(new InMemoryAccountStore());
+        service.registerApplication(application("http://localhost:9101"));
+        var user = service.createUser(new SaveUserCommand("alice", "alice@example.com", "Alice", "123"));
+        assertThatThrownBy(() -> service.authorize(user.getId(), "cms-ai"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.isAuthorized(user.getId(), "cms-ai")).isFalse();
     }
 
     @Test
-    void findUsersAndApplicationsReturnFilteredResults() {
-        AccountDirectoryService service = new AccountDirectoryService(new InMemoryAccountStore(), new RecordingSyncClient());
-        service.createUser(new SaveUserCommand("zhangsan", "zhangsan@example.com", "张三", "13800000000"));
-        service.createUser(new SaveUserCommand("lisi", "lisi@example.com", "李四", "13900000000"));
-        service.registerApplication(new RegisterApplicationCommand(
-                "cms-ai", "双碳服务", "http://localhost:9003",
-                "http://localhost:9003/account-sso/callback",
-                "http://localhost:9003/account-admin/users/{externalUserId}/permissions",
-                "http://localhost:9003", "secret", "default"));
+    void availableFunctionsFollowConfigurationAndClearWhenConfigurationIsRemoved() {
+        var app = new AccountApplication("cms-ai", "CMS", "", "", "", "", "synthetic-secret", "default");
+        assertThat(app.getProtocolCapabilities()).isEmpty();
+        app.setSsoCallbackUrl("https://cms.example.test/callback");
+        assertThat(app.getProtocolCapabilities()).isEqualTo("sso");
+        app.setNotifyBaseUrl("https://cms.example.test");
+        assertThat(app.getProtocolCapabilities()).contains("directory", "user_sync", "menu_permission_v1");
+        app.setNotifyBaseUrl("");
+        assertThat(app.getProtocolCapabilities()).isEqualTo("sso");
+    }
 
-        assertThat(service.findUsers("zhang", null)).hasSize(1);
+    @Test
+    void secretRotationAndUserSearchRetainTheirBusinessBehavior() {
+        var service = new AccountDirectoryService(new InMemoryAccountStore());
+        service.registerApplication(application(""));
+        service.createUser(new SaveUserCommand("alice", "alice@example.com", "Alice", "123"));
+        service.createUser(new SaveUserCommand("bob", "bob@example.com", "Bob", "456"));
+        String secret = service.rotateApplicationSecret("cms-ai");
+        assertThat(secret).isNotBlank().isNotEqualTo("synthetic-secret");
+        assertThat(service.getApplication("cms-ai").getSecretVersion()).isEqualTo(2);
+        assertThat(service.findUsers("alice", null)).hasSize(1);
         assertThat(service.findUsers(null, null)).hasSize(2);
-        assertThat(service.findUsers("nonexist", null)).isEmpty();
-        assertThat(service.findApplications(null, null)).hasSize(1);
     }
 
-    private static class RecordingSyncClient implements ApplicationUserSyncClient {
-
-        private final List<String> events = new ArrayList<>();
-
-        @Override
-        public void upsert(AccountApplication application, AccountUser user) {
-            events.add("upsert:" + application.getAppCode() + ":" + user.getAccount() + ":" + application.getDefaultTenantCode());
-        }
-
-        @Override
-        public void disable(AccountApplication application, AccountUser user) {
-            events.add("disable:" + application.getAppCode() + ":" + user.getAccount() + ":" + application.getDefaultTenantCode());
-        }
+    private RegisterApplicationCommand application(String serviceUrl) {
+        return new RegisterApplicationCommand("cms-ai", "CMS", "https://cms.example.test",
+                "https://cms.example.test/callback", "", serviceUrl, "synthetic-secret", "default");
     }
 }

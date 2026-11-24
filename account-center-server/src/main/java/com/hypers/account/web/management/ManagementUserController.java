@@ -221,6 +221,8 @@ public class ManagementUserController {
         long version;
         Instant createdAt;
         Instant updatedAt;
+        String createdBy;
+        String updatedBy;
 
         public static UserResponse from(AccountUser user) {
             return new UserResponse(
@@ -232,7 +234,9 @@ public class ManagementUserController {
                     user.getStatus(),
                     user.getVersion(),
                     user.getCreatedAt(),
-                    user.getUpdatedAt());
+                    user.getUpdatedAt(),
+                    user.getCreatedBy(),
+                    user.getUpdatedBy());
         }
     }
 

@@ -4,6 +4,8 @@
 
 ## 先读规则
 
+当前为未投入使用的全新开发阶段，执行 [工作区阶段规则](../AGENTS.md#当前开发阶段)：直接维护最新模型，不保留无用兼容；初始化 SQL 可合并重整，实际开发库不自动清理。
+
 1. 先基于仓库事实判断包归属、服务边界、表归属、配置入口和既有实现模式。
 2. 不确定时先搜索现有 Controller、Service、Store、Mapper、启动类和配置文件，不只凭类名猜测。
 3. 修改必须紧贴当前任务。不要顺手做无关重构、全仓库格式化、批量替换历史风格或移动模块目录。
@@ -93,8 +95,8 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 - 数据库迁移使用 Flyway，每个方言的完整脚本分别位于 `account-center-server/src/main/resources/db/vendor/postgresql` 与 `db/vendor/mysql`；`AccountFlywayConfiguration` 只加载匹配目录，H2 使用 PostgreSQL 方言。不要扫描父目录或继续加载旧公共迁移目录。
 - 新表必须在同一迁移交付完整字段类型和数据库注释：MySQL 直接在 CREATE TABLE 写 COMMENT，PostgreSQL 在同一文件紧跟 COMMENT ON；不拆成下一版本补注释，不维护重复 schema.sql 副本。
-- 2026-09-04 开发者明确授权重建未发布测试库，本次用完整 V1 替换旧 V1～V8；旧库不兼容，数据和历史由开发者处理。此例外不适用于以后已发布迁移。自动 baseline 和 clean 均禁止，初始化默认由应用对空库执行。
-- 新增表、字段变更只新增对应版本的增量迁移脚本（`V{N}__{description}.sql`）。
+- 当前未发布结构直接维护完整初始化基线，避免累加兼容迁移、回填和旧字段。自动 baseline 和 clean 均禁止，初始化由应用对空库执行；已有开发库由开发者自行决定是否重建。
+- 实际投入使用后，只有明确要求保留既有数据/调用方时才按版本增量演进，不把未来可能上线作为当前兼容代码的依据。
 - Flyway 脚本命名格式: `V{版本号}__{描述}.sql`，版本号递增，描述用下划线分隔。
 - 数据库表名统一使用 `account_` 前缀。
 - 新建表及新增/修改字段必须有中文 SQL 说明；脚本写完后执行 `account-database-rules` 的注释检查并记录覆盖与遗漏，缺失不得交付。历史已执行迁移不改写，源码注释不等同于数据库 COMMENT。

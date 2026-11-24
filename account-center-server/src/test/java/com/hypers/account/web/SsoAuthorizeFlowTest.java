@@ -58,7 +58,7 @@ class SsoAuthorizeFlowTest {
                 "cms-ai", "双碳服务", "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
-                "http://localhost:9003", "secret", "default"));
+                "", "secret", "default"));
         AccountUser user = directoryService.createUser(new SaveUserCommand(
                 "testuser", "test@example.com", "测试", "13800000000"));
         // 通过 store 设置密码
@@ -95,7 +95,7 @@ class SsoAuthorizeFlowTest {
                 "cms-ai", "双碳服务", "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
-                "http://localhost:9003", "secret", "default"));
+                "", "secret", "default"));
         AccountUser user = directoryService.createUser(new SaveUserCommand(
                 "noperm", "noperm@example.com", "无权限", "13800000000"));
         String encoded = loginService.encodePassword("password123");
@@ -129,7 +129,7 @@ class SsoAuthorizeFlowTest {
                 "cms-ai", "双碳服务", "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
-                "http://localhost:9003", "secret", "default"));
+                "", "secret", "default"));
         AccountUser user = directoryService.createUser(new SaveUserCommand(
                 "testuser", "test@example.com", "测试", "13800000000"));
         String encoded = loginService.encodePassword("correct");

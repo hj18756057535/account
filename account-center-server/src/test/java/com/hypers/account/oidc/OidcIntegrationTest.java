@@ -44,7 +44,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.mock.web.MockHttpSession;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -109,19 +108,15 @@ class OidcIntegrationTest {
         registry.add("account.oidc.key-store", () -> KEYSTORE.toUri().toString());
         registry.add("account.oidc.key-store-password", () -> KEY_PASSWORD);
         registry.add("account.oidc.signing-key-alias", () -> "test-signing");
-        registry.add("account.oidc.clients.oidc-agent.secret-hash",
-                () -> "{bcrypt}" + new BCryptPasswordEncoder().encode(CLIENT_SECRET));
         registry.add("account.oidc.clients.oidc-agent.post-logout-redirect-uris[0]",
                 () -> "http://localhost:9000/logged-out");
-        registry.add("account.oidc.clients.oidc-managed.secret-hash",
-                () -> "{bcrypt}" + new BCryptPasswordEncoder().encode(CLIENT_SECRET));
     }
 
     @BeforeEach
     void registerUserAndApplication() {
         directory.registerApplication(new RegisterApplicationCommand(CLIENT, "OIDC Agent",
                 "http://localhost:9000", CALLBACK, "http://localhost:9000/permissions",
-                "http://localhost:9000", UUID.randomUUID().toString(), "default"));
+                "", CLIENT_SECRET, "default"));
         accountStore.updateApplicationStatus(CLIENT, "enabled");
         user = directory.createUser(new SaveUserCommand("oidc-" + UUID.randomUUID(),
                 "oidc@example.test", "OIDC Test User", "10000000000"));
@@ -318,10 +313,10 @@ class OidcIntegrationTest {
     void oidcOnlyManagedApplicationDoesNotRequireAUserSyncProvider() throws Exception {
         var app = directory.createManagedApplication(new SaveApplicationCommand("oidc-managed", "Managed Agent",
                 "http://localhost:9000", CALLBACK, "http://localhost:9000/permissions",
-                "http://localhost:9000", "default", "sso", UUID.randomUUID().toString(), 0), user.getId());
+                "", "default", CLIENT_SECRET, 0), user.getId());
         accountStore.saveApplicationAccess(user.getId(), app.getAppCode(), "enabled", 0, user.getId());
-        synchronizationStore.enroll(app.getAppCode());
-        assertThat(accountStore.isAuthorized(user.getId(), app.getAppCode())).isFalse();
+
+        assertThat(accountStore.isAuthorized(user.getId(), app.getAppCode())).isTrue();
         var result = mvc.perform(get("/oauth2/authorize").session(session())
                 .queryParam("client_id", app.getAppCode()).queryParam("redirect_uri", CALLBACK)
                 .queryParam("response_type", "code").queryParam("scope", "openid profile")

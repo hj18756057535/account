@@ -74,7 +74,7 @@ public class HttpApplicationMenuPermissionClient implements ApplicationMenuPermi
                                         Duration timeout) {
         URI base;
         try {
-            base = policy.target(application, MenuPermissionProtocol.VERSION);
+            base = policy.target(application);
         } catch (ApplicationSyncFailure | IllegalArgumentException exception) {
             throw unavailable();
         }

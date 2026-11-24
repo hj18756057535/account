@@ -29,13 +29,10 @@
     </select>
 
     <insert id="insert">
-        insert into account_idempotency_records
-            (id, idempotency_key, operator_id, request_method, request_path, request_hash,
-             status, response_status, response_body, created_at, expires_at)
+        insert into account_idempotency_records (id, idempotency_key, operator_id, request_method, request_path, request_hash, status, response_status, response_body, expires_at,
+            <include refid="com.hypers.account.audit.AuditFields.insertColumns"/>)
         values
-            (#{record.id}, #{record.idempotencyKey}, #{record.operatorId}, #{record.requestMethod},
-             #{record.requestPath}, #{record.requestHash}, #{record.status}, #{record.responseStatus},
-             #{record.responseBody}, #{record.createdAt}, #{record.expiresAt})
+            (#{record.id}, #{record.idempotencyKey}, #{record.operatorId}, #{record.requestMethod}, #{record.requestPath}, #{record.requestHash}, #{record.status}, #{record.responseStatus}, #{record.responseBody}, #{record.expiresAt}, <include refid="com.hypers.account.audit.AuditFields.insertValues"/>)
     </insert>
 
     <update id="complete">
@@ -43,7 +40,8 @@
         set status = 'completed',
             response_status = #{responseStatus},
             response_body = #{responseBody},
-            expires_at = #{expiresAt}
+            expires_at = #{expiresAt},
+            <include refid="com.hypers.account.audit.AuditFields.updateFields"/>
         where id = #{id} and status = 'processing'
     </update>
 
