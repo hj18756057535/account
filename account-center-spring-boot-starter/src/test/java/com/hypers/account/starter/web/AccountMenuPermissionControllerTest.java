@@ -2,17 +2,24 @@ package com.hypers.account.starter.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.hypers.account.contract.MenuPermissionProtocol;
 import com.hypers.account.contract.application.MenuPermissionNode;
 import com.hypers.account.contract.application.MenuPermissionQuery;
 import com.hypers.account.contract.application.MenuPermissionReplaceCommand;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;
+import com.hypers.account.contract.directory.AccountDirectoryRole;
 import com.hypers.account.starter.properties.AccountIntegrationProperties;
 import com.hypers.account.starter.spi.AccountMenuPermissionHandler;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 
 class AccountMenuPermissionControllerTest {
@@ -52,6 +59,47 @@ class AccountMenuPermissionControllerTest {
                     assertThat(exception.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
                     assertThat(exception.getCode()).isEqualTo("PERMISSION_CODE_INVALID");
                 });
+    }
+
+    @Test
+    void roleAssignmentsUseTheMappedSubjectAndKeepLargeIdsAsStrings() {
+        AccountDirectoryRole role = new AccountDirectoryRole();
+        role.setLocalRoleId("9007199254740993");
+        role.setName("Editor");
+        role.setStatus("enabled");
+        MenuPermissionSnapshot value = snapshot();
+        value.setRoles(List.of(role));
+        value.setSelectedRoleIds(List.of(role.getLocalRoleId()));
+        AccountMenuPermissionHandler handler = mock(AccountMenuPermissionHandler.class);
+        when(handler.query(any())).thenReturn(value);
+        when(handler.replace(any(), any())).thenReturn(value);
+        MenuPermissionReplaceCommand command = replaceCommand();
+        command.setSelectedRoleIds(List.of(role.getLocalRoleId()));
+
+        MenuPermissionSnapshot result = controller(handler).replace(
+                MenuPermissionProtocol.VERSION, "idempotency-key-roles", command);
+
+        ArgumentCaptor<MenuPermissionQuery> subject = ArgumentCaptor.forClass(MenuPermissionQuery.class);
+        verify(handler).query(subject.capture());
+        assertThat(subject.getValue()).usingRecursiveComparison().isEqualTo(query());
+        verify(handler).replace("idempotency-key-roles", command);
+        assertThat(result.getSelectedRoleIds()).containsExactly("9007199254740993");
+    }
+
+    @Test
+    void roleUnsupportedApplicationRejectsAssignmentsBeforeAnyWrite() {
+        AccountMenuPermissionHandler handler = mock(AccountMenuPermissionHandler.class);
+        when(handler.query(any())).thenReturn(snapshot());
+        MenuPermissionReplaceCommand command = replaceCommand();
+        command.setSelectedRoleIds(List.of("7"));
+
+        assertThatThrownBy(() -> controller(handler).replace(
+                MenuPermissionProtocol.VERSION, "idempotency-key-roles", command))
+                .isInstanceOfSatisfying(AccountIntegrationException.class, exception -> {
+                    assertThat(exception.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(exception.getCode()).isEqualTo("PERMISSION_CODE_INVALID");
+                });
+        verify(handler, never()).replace(any(), any());
     }
 
     @Test

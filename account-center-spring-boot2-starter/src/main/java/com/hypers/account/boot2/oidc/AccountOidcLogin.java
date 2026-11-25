@@ -109,12 +109,6 @@ public final class AccountOidcLogin {
         return true;
     }
 
-    /** 消费当前浏览器的一次性登录结果，返回已验证的 Account subject。 */
-    public String consumeSubject(HttpServletRequest request, HttpServletResponse response) {
-        AccountOidcIdentity identity = consumeIdentity(request, response);
-        return identity == null ? null : identity.getSubject();
-    }
-
     /** 原子领取经验证的用户身份，用于宿主首次登录建档及后续账号关联。 */
     public AccountOidcIdentity consumeIdentity(HttpServletRequest request, HttpServletResponse response) {
         if (!expectedOrigin.equals(request.getHeader(HttpHeaders.ORIGIN))) {
@@ -128,10 +122,6 @@ public final class AccountOidcLogin {
         String stored = take(keyPrefix + "result:" + result);
         if (stored == null) {
             return null;
-        }
-        // 升级前已签发的结果仅保存 subject，其余资料留空，供已有账号完成登录。
-        if (!stored.startsWith("{")) {
-            return new AccountOidcIdentity(issuer, stored, null, null);
         }
         try {
             AccountOidcIdentity identity = mapper.readValue(stored, AccountOidcIdentity.class);

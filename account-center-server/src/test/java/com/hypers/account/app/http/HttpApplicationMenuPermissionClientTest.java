@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hypers.account.app.model.AccountApplication;
 import com.hypers.account.app.model.ApplicationMenuPermissionFailure;
 import com.hypers.account.app.service.ApplicationSyncPolicy;
@@ -74,6 +75,25 @@ class HttpApplicationMenuPermissionClientTest {
         assertThat(result.getNodes()).extracting("code").containsExactly("group", "menu");
         assertThat(requests).hasValue(1);
         assertThat(idempotencyKeys).containsExactly((String) null);
+    }
+
+    @Test
+    void roleCatalogKeepsStringIdsAndRejectsNumericProviderIds() throws Exception {
+        ObjectNode tree = (ObjectNode) json.readTree(validSnapshot());
+        ObjectNode role = tree.putArray("roles").addObject();
+        role.put("localRoleId", "9007199254740993");
+        role.put("name", "Editor");
+        role.put("status", "enabled");
+        tree.putArray("selectedRoleIds").add("9007199254740993");
+        response.set(json.writeValueAsString(tree));
+        MenuPermissionQuery query = MenuPermissionQuery.builder()
+                .protocolVersion("menu_permission_v1").appCode("app-1").globalUserId("user-1")
+                .localUserId("local-1").account("alice").locale("zh-CN").build();
+        assertThat(client.query(application, query).getSelectedRoleIds()).containsExactly("9007199254740993");
+        role.put("localRoleId", 9007199254740993L);
+        response.set(json.writeValueAsString(tree));
+        assertThatThrownBy(() -> client.query(application, query))
+                .isInstanceOf(ApplicationMenuPermissionFailure.class);
     }
 
     @Test

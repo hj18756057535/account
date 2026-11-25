@@ -3,23 +3,12 @@ package com.hypers.account.web.management;
 import com.hypers.account.app.exception.BusinessException;
 import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.app.service.ApplicationMenuPermissionService;
-import com.hypers.account.app.exception.BusinessException;
-import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.auth.AccountSessionUser;
-import com.hypers.account.app.exception.BusinessException;
-import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.application.MenuPermissionNode;
-import com.hypers.account.app.exception.BusinessException;
-import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;
-import com.hypers.account.app.exception.BusinessException;
-import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.contract.directory.AccountDirectoryRole;
 import com.hypers.account.web.ApiMessages;
-import com.hypers.account.app.exception.BusinessException;
-import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.web.AuthController;
-import com.hypers.account.app.exception.BusinessException;
-import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.web.management.service.IdempotencyService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -79,7 +68,7 @@ public class ManagementMenuPermissionController {
                 HttpStatus.OK.value(), MenuPermissionResponse.class,
                 () -> MenuPermissionResponse.from(service.replace(
                         userId, appCode, body.getExpectedAccessVersion(), body.getExpectedCatalogRevision(),
-                        body.getExpectedPermissionRevision(), body.getSelectedCodes(), locale(request),
+                        body.getExpectedPermissionRevision(), body.getSelectedCodes(), body.getSelectedRoleIds(), locale(request),
                         idempotencyKey, operatorId)));
     }
 
@@ -125,6 +114,10 @@ public class ManagementMenuPermissionController {
         @Size(max = 5000, message = "validation.menuPermissionCodes")
         private List<@NotBlank(message = "validation.menuPermissionCodes")
                 @Size(max = 128, message = "validation.menuPermissionCodes") String> selectedCodes;
+
+        @Size(max = 5000, message = "validation.menuPermissionCodes")
+        private List<@NotBlank(message = "validation.menuPermissionCodes")
+                @Size(max = 128, message = "validation.menuPermissionCodes") String> selectedRoleIds;
     }
 
     @Getter
@@ -139,12 +132,15 @@ public class ManagementMenuPermissionController {
         private List<MenuPermissionNode> nodes;
         private List<String> selectedCodes;
         private List<String> inheritedCodes;
+        private List<AccountDirectoryRole> roles;
+        private List<String> selectedRoleIds;
 
         static MenuPermissionResponse from(ApplicationMenuPermissionService.Result result) {
             MenuPermissionSnapshot snapshot = result.getSnapshot();
             return new MenuPermissionResponse(result.getAccessVersion(), snapshot.getCatalogRevision(),
                     snapshot.getPermissionRevision(), snapshot.getAssignmentMode(), snapshot.getNodes(),
-                    snapshot.getSelectedCodes(), snapshot.getInheritedCodes());
+                    snapshot.getSelectedCodes(), snapshot.getInheritedCodes(), snapshot.getRoles(),
+                    snapshot.getSelectedRoleIds());
         }
     }
 }

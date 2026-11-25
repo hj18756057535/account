@@ -6,6 +6,8 @@
 
 内网开发可使用 [默认初始化与改址脚本](../scripts/Initialize-Oidc.ps1)，操作见 [快速接入](../docs/application-integration/内网OIDC快速接入.md)。
 
+CMS 默认应用只使用一条 [初始化 SQL](sql/init-cms-ai.sql)，其 Secret 与 CMS 默认 `bootstrap.yml` 的公共配置保持一致；不使用配置生成脚本或额外 properties。已有本机 SQL 已与当前配置核对，不生成或轮换凭据。使用步骤见 [CMS 部署方案](../docs/application-integration/CMS接入-部署对接方案.md)。
+
 ## 当前需求与数据库结构
 
 ### Excel 用户导入

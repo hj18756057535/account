@@ -5,6 +5,7 @@ import com.hypers.account.app.model.ApplicationMenuPermissionFailure;
 import com.hypers.account.contract.MenuPermissionProtocol;
 import com.hypers.account.contract.application.MenuPermissionNode;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;
+import com.hypers.account.contract.directory.AccountDirectoryRole;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,13 +24,16 @@ class MenuPermissionSnapshotValidator {
     private static final Set<String> SNAPSHOT_FIELDS = new HashSet<>(Arrays.asList(
             "catalogRevision", "permissionRevision", "assignmentMode", "nodes",
             "selectedCodes", "inheritedCodes"));
+    private static final Set<String> ALLOWED_SNAPSHOT_FIELDS = new HashSet<>(Arrays.asList(
+            "catalogRevision", "permissionRevision", "assignmentMode", "nodes",
+            "selectedCodes", "inheritedCodes", "roles", "selectedRoleIds"));
     private static final Set<String> NODE_FIELDS = new HashSet<>(Arrays.asList(
             "code", "parentCode", "nodeType", "defaultName", "localizedNames", "assignable", "sort"));
     private static final Set<String> REQUIRED_NODE_FIELDS = new HashSet<>(Arrays.asList(
             "code", "nodeType", "defaultName", "localizedNames", "assignable", "sort"));
 
     static void validateJson(JsonNode tree) {
-        if (!onlyFields(tree, SNAPSHOT_FIELDS) || !hasFields(tree, SNAPSHOT_FIELDS)
+        if (!onlyFields(tree, ALLOWED_SNAPSHOT_FIELDS) || !hasFields(tree, SNAPSHOT_FIELDS)
                 || !tree.get("catalogRevision").isTextual()
                 || !tree.get("permissionRevision").isTextual()
                 || !tree.get("assignmentMode").isTextual()
@@ -49,6 +53,21 @@ class MenuPermissionSnapshotValidator {
                     || !node.get("sort").canConvertToInt()) fail();
             java.util.Iterator<JsonNode> names = node.get("localizedNames").elements();
             while (names.hasNext()) if (!names.next().isTextual()) fail();
+        }
+        JsonNode roles = tree.get("roles");
+        JsonNode selected = tree.get("selectedRoleIds");
+        if (roles == null || roles.isNull()) {
+            if (selected != null && !selected.isNull()) fail();
+        } else {
+            if (!roles.isArray() || !textArray(selected)) fail();
+            Set<String> fields = Set.of("localRoleId", "code", "name", "status");
+            for (JsonNode role : roles) {
+                if (!role.isObject() || !onlyFields(role, fields)
+                        || !role.has("localRoleId") || !role.get("localRoleId").isTextual()
+                        || !role.has("status") || !role.get("status").isTextual()
+                        || role.hasNonNull("code") && !role.get("code").isTextual()
+                        || role.hasNonNull("name") && !role.get("name").isTextual()) fail();
+            }
         }
     }
 
@@ -74,6 +93,7 @@ class MenuPermissionSnapshotValidator {
         }
         validateCodes(snapshot.getSelectedCodes(), nodesByCode, true);
         validateCodes(snapshot.getInheritedCodes(), nodesByCode, false);
+        validateRoles(snapshot);
 
         List<MenuPermissionNode> nodes = new ArrayList<>(snapshot.getNodes());
         nodes.sort(Comparator.comparingInt(MenuPermissionNode::getSort).thenComparing(MenuPermissionNode::getCode));
@@ -81,6 +101,27 @@ class MenuPermissionSnapshotValidator {
         snapshot.setSelectedCodes(new ArrayList<>(snapshot.getSelectedCodes()));
         snapshot.setInheritedCodes(new ArrayList<>(snapshot.getInheritedCodes()));
         return snapshot;
+    }
+
+    private static void validateRoles(MenuPermissionSnapshot snapshot) {
+        if (snapshot.getRoles() == null) {
+            if (snapshot.getSelectedRoleIds() != null) fail();
+            return;
+        }
+        if (snapshot.getRoles().size() > MenuPermissionProtocol.MAX_NODES
+                || snapshot.getSelectedRoleIds() == null
+                || snapshot.getSelectedRoleIds().size() > MenuPermissionProtocol.MAX_SELECTED_CODES) fail();
+        Set<String> ids = new HashSet<>();
+        for (AccountDirectoryRole role : snapshot.getRoles()) {
+            if (role == null || !code(role.getLocalRoleId()) || !ids.add(role.getLocalRoleId())
+                    || !("enabled".equals(role.getStatus()) || "disabled".equals(role.getStatus()))
+                    || role.getCode() != null && !text(role.getCode(), 1, 128)
+                    || role.getName() != null && !text(role.getName(), 1, 256)) fail();
+        }
+        Set<String> selected = new HashSet<>();
+        for (String id : snapshot.getSelectedRoleIds()) {
+            if (!code(id) || !ids.contains(id) || !selected.add(id)) fail();
+        }
     }
 
     private static void validateNode(MenuPermissionNode node) {

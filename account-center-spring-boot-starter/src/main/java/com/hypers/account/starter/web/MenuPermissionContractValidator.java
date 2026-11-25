@@ -5,6 +5,7 @@ import com.hypers.account.contract.application.MenuPermissionNode;
 import com.hypers.account.contract.application.MenuPermissionQuery;
 import com.hypers.account.contract.application.MenuPermissionReplaceCommand;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;
+import com.hypers.account.contract.directory.AccountDirectoryRole;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -45,7 +46,9 @@ final class MenuPermissionContractValidator {
                 || !text(command.getExpectedPermissionRevision(), 1, 256)
                 || command.getSelectedCodes() == null
                 || command.getSelectedCodes().size() > MenuPermissionProtocol.MAX_SELECTED_CODES
-                || !validCodes(command.getSelectedCodes(), true)) {
+                || !validCodes(command.getSelectedCodes(), true)
+                || command.getSelectedRoleIds() != null && (command.getSelectedRoleIds().size() > MenuPermissionProtocol.MAX_SELECTED_CODES
+                || !validCodes(command.getSelectedRoleIds(), true))) {
             fail(HttpStatus.UNPROCESSABLE_ENTITY, "PERMISSION_CODE_INVALID");
         }
     }
@@ -93,6 +96,7 @@ final class MenuPermissionContractValidator {
             }
         }
 
+        validateRoles(snapshot);
         List<MenuPermissionNode> nodes = new ArrayList<>(snapshot.getNodes());
         nodes.sort(Comparator.comparingInt(MenuPermissionNode::getSort)
                 .thenComparing(MenuPermissionNode::getCode));
@@ -100,6 +104,38 @@ final class MenuPermissionContractValidator {
         snapshot.setSelectedCodes(new ArrayList<>(snapshot.getSelectedCodes()));
         snapshot.setInheritedCodes(new ArrayList<>(snapshot.getInheritedCodes()));
         return snapshot;
+    }
+
+    void requireRoleSupport(MenuPermissionSnapshot snapshot) {
+        if (normalizeSnapshot(snapshot).getRoles() == null) {
+            fail(HttpStatus.UNPROCESSABLE_ENTITY, "PERMISSION_CODE_INVALID");
+        }
+    }
+
+    private void validateRoles(MenuPermissionSnapshot snapshot) {
+        if (snapshot.getRoles() == null) {
+            if (snapshot.getSelectedRoleIds() != null) fail(HttpStatus.UNPROCESSABLE_ENTITY, "CATALOG_INVALID");
+            return;
+        }
+        if (snapshot.getRoles().size() > MenuPermissionProtocol.MAX_NODES
+                || snapshot.getSelectedRoleIds() == null
+                || snapshot.getSelectedRoleIds().size() > MenuPermissionProtocol.MAX_SELECTED_CODES) {
+            fail(HttpStatus.UNPROCESSABLE_ENTITY, "CATALOG_INVALID");
+        }
+        Set<String> ids = new HashSet<>();
+        for (AccountDirectoryRole role : snapshot.getRoles()) {
+            if (role == null || !printableAscii(role.getLocalRoleId(), 1, 128)
+                    || !ids.add(role.getLocalRoleId())
+                    || !("enabled".equals(role.getStatus()) || "disabled".equals(role.getStatus()))
+                    || role.getCode() != null && !text(role.getCode(), 1, 128)
+                    || role.getName() != null && !text(role.getName(), 1, 256)) {
+                fail(HttpStatus.UNPROCESSABLE_ENTITY, "CATALOG_INVALID");
+            }
+        }
+        Set<String> selected = new HashSet<>();
+        for (String id : snapshot.getSelectedRoleIds()) {
+            if (!ids.contains(id) || !selected.add(id)) fail(HttpStatus.UNPROCESSABLE_ENTITY, "CATALOG_INVALID");
+        }
     }
 
     private void validateSubject(String expectedAppCode,

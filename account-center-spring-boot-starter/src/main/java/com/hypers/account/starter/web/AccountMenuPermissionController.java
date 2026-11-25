@@ -47,6 +47,12 @@ public class AccountMenuPermissionController {
             @RequestBody MenuPermissionReplaceCommand command) {
         validator.validateReplace(properties.getAppCode(), protocolVersion, idempotencyKey, command);
         try {
+            if (command.getSelectedRoleIds() != null) {
+                validator.requireRoleSupport(handler.query(MenuPermissionQuery.builder()
+                        .protocolVersion(command.getProtocolVersion()).appCode(command.getAppCode())
+                        .globalUserId(command.getGlobalUserId()).localUserId(command.getLocalUserId())
+                        .account(command.getAccount()).locale(command.getLocale()).build()));
+            }
             return validator.normalizeSnapshot(handler.replace(idempotencyKey, command));
         } catch (AccountIntegrationException exception) {
             throw exception;

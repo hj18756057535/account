@@ -73,18 +73,20 @@ class ApplicationMenuPermissionServiceTest {
         when(client.replace(any(), eq("idem-1"), any())).thenReturn(snapshot());
 
         var result = service.replace("user-1", "app-1", 7, "catalog-1", "permission-1",
-                List.of("menu.secret-value"), "zh-CN", "idem-1", "admin");
+                List.of("menu.secret-value"), List.of("9007199254740993"), "zh-CN", "idem-1", "admin");
 
         assertThat(result.getAccessVersion()).isEqualTo(7);
         ArgumentCaptor<MenuPermissionReplaceCommand> command = ArgumentCaptor.forClass(MenuPermissionReplaceCommand.class);
         verify(client).replace(any(), eq("idem-1"), command.capture());
         assertThat(command.getValue().getGlobalUserId()).isEqualTo("user-1");
         assertThat(command.getValue().getLocalUserId()).isEqualTo("local-1");
+        assertThat(command.getValue().getSelectedRoleIds()).containsExactly("9007199254740993");
         ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
         verify(audit).log(eq("admin"), eq("APPLICATION_MENU_PERMISSION_REPLACED"),
                 eq("USER_APPLICATION"), eq("user-1:app-1"), detail.capture());
         assertThat(detail.getValue()).contains("\"selectedCount\":1", "selectionDigest")
-                .doesNotContain("menu.secret-value");
+                .contains("\"selectedRoleCount\":1", "roleSelectionDigest")
+                .doesNotContain("menu.secret-value", "9007199254740993");
     }
 
     @Test
@@ -105,7 +107,7 @@ class ApplicationMenuPermissionServiceTest {
                 .thenThrow(new ApplicationMenuPermissionFailure(409, "PERMISSION_REVISION_CONFLICT"));
 
         assertThatThrownBy(() -> service.replace("user-1", "app-1", 7, "catalog-1", "permission-1",
-                List.of(), "en-US", "idem-1", "admin"))
+                List.of(), null, "en-US", "idem-1", "admin"))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(error -> {
                     BusinessException api = (BusinessException) error;

@@ -1,5 +1,5 @@
 BEGIN;
-
+# 密码  Acc@2026#Kx9mT2
 INSERT INTO account_users (
     id,
     account,
@@ -19,7 +19,7 @@ INSERT INTO account_users (
              '18756057535',
              'enabled',
              1,
-             '$2a$10$APXMtVClZQIMn9UYP9DRQe85jsA5iopstkzGbgqbQuEKEXToKuPQG',
+             '$2a$10$X0TV696sxm3JDafJDSlFGuqpkRQG8rRhJxZczuePAm9dE4RtFf2jW',
              'bootstrap',
              'bootstrap'
          );

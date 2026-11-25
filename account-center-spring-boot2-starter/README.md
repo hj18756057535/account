@@ -26,7 +26,7 @@ Starter JAR 内含菜单协议、Handler 接口和签名校验实现。它不依
 
 宿主启用 OIDC 时引入 `spring-boot-starter-oauth2-client`，并提供连接共享 Redis 的 `StringRedisTemplate`。设置 `account.integration.oidc.enabled=true`、`issuer`、`client-id`、`client-secret`、`redirect-uri` 和 `login-page`。回调和登录页使用同一浏览器源，回调路径以 `/login/account/callback` 结尾。
 
-Starter 提供 `GET /login/account` 与 `GET /login/account/callback`，请求 openid/profile。宿主提供 `POST /login/account/exchange`，调用 `AccountOidcLogin.consumeIdentity` 原子领取已校验的 issuer、subject、账号和姓名，自动建档或读取持久关联，再建立本地登录态。`consumeSubject` 保持原返回语义。共享 Redis 保存 5 分钟的请求和 1 分钟的身份结果。部署地址、CMS 关联表与验收见 [CMS 部署对接方案](../../docs/application-integration/CMS接入-部署对接方案.md)。
+Starter 提供 `GET /login/account` 与 `GET /login/account/callback`，请求 openid/profile。宿主提供 `POST /login/account/exchange`，调用 `AccountOidcLogin.consumeIdentity` 原子领取已校验的 issuer、subject、账号和姓名，自动建档或读取持久关联，再建立本地登录态。只接受当前完整身份结构，不保留未发布版本的 subject 接口或格式兼容。共享 Redis 保存 5 分钟的请求和 1 分钟的身份结果。部署地址、CMS 关联表与验收见 [CMS 部署对接方案](../../docs/application-integration/CMS接入-部署对接方案.md)。
 
 ## 菜单权限 Provider
 

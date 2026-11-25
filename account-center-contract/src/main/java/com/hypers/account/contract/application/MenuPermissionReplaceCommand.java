@@ -25,4 +25,6 @@ public class MenuPermissionReplaceCommand {
     private String expectedPermissionRevision;
     @Builder.Default
     private List<String> selectedCodes = new ArrayList<>();
+    /** 本次用户角色关联；未提供时不修改角色，空集合清空可管理范围内的关联。 */
+    private List<String> selectedRoleIds;
 }

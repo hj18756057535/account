@@ -99,7 +99,6 @@ paths:
         Idempotency-Key 继续用于请求跟踪和重试，提供方无需为它建立独立历史回执表。
         Account 仅接收与命令完全相同的应用、用户、状态和版本，禁止使用更大版本代替确认。
         Starter 内存 Guard 不是持久化保证，真实业务 Handler 必须自行实现跨重启和多实例幂等。
-        旧接入仍保留原兼容语义；以下托管约束不表示自动迁移旧客户端。
       parameters:
         - name: X-Account-Protocol-Version
           in: header
@@ -166,10 +165,12 @@ paths:
     post:
       tags: [Account Menu Permission]
       operationId: queryAccountMenuPermissions
-      summary: 查询应用菜单目录及用户当前权限
+      summary: 查询应用角色及菜单目录和用户当前授权
       description: >-
         仅供 Account Server 调用。返回应用的稳定菜单目录、Account 托管选择、
         应用其他授权来源带来的只读继承权限，以及不透明目录/权限修订号。
+        支持角色关联时一并返回已有角色列表和当前角色选择；不支持时省略或返回 null。
+        目录由应用维护，Account 只能查询，不提供菜单或角色定义的新增、编辑、删除。
       parameters:
         - $ref: '#/components/parameters/AppCodeHeader'
         - $ref: '#/components/parameters/TimestampHeader'
@@ -205,10 +206,14 @@ paths:
     put:
       tags: [Account Menu Permission]
       operationId: replaceAccountMenuPermissions
-      summary: 整集替换 Account 托管的用户菜单权限
+      summary: 更新用户与应用已有角色及菜单的授权关联
       description: >-
-        只替换 Account 托管权限，不删除应用原生角色权限。应用必须校验目录和权限修订号，
+        替换 Account 托管菜单选择；可选 selectedRoleIds 调整应用开放管理的用户角色关联，
+        省略不处理、空数组清空。角色请求必须由支持该能力的应用处理；未开放关系继续保留。
+        应用必须校验目录和权限修订号，
         按 Idempotency-Key 保存并重放首次成功结果，并返回应用归一化后的完整权限快照。
+        请求仅包含应用已有菜单编码、角色 ID 及当前用户上下文，不接收名称、路由、层级等定义字段；
+        授权关系由应用依据自身模型保存，不修改菜单目录或通用角色定义。
       parameters:
         - $ref: '#/components/parameters/AppCodeHeader'
         - $ref: '#/components/parameters/TimestampHeader'
@@ -422,6 +427,12 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/MenuPermissionCode'
+        selectedRoleIds:
+          type: [array, 'null']
+          description: 用户与应用已有角色的关联；未提供或 null 时不改角色，空集合清空可管理范围内关联；未提供角色能力的应用必须拒绝非 null 值
+          maxItems: 5000
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128 }
     MenuPermissionSnapshot:
       type: object
       additionalProperties: false
@@ -462,6 +473,27 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/MenuPermissionCode'
+        roles:
+          type: [array, 'null']
+          readOnly: true
+          description: 应用公开的已有可关联角色；缺失或 null 表示不提供角色关联，非 null 时 selectedRoleIds 必须同时为数组
+          maxItems: 10000
+          items: { $ref: '#/components/schemas/DirectoryRole' }
+        selectedRoleIds:
+          type: [array, 'null']
+          description: 当前用户在公开角色范围内的关联，必须是 roles 中的字符串 ID
+          maxItems: 5000
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128 }
+    DirectoryRole:
+      type: object
+      additionalProperties: false
+      required: [localRoleId, status]
+      properties:
+        localRoleId: { type: string, minLength: 1, maxLength: 128 }
+        code: { type: [string, 'null'], maxLength: 128 }
+        name: { type: [string, 'null'], maxLength: 256 }
+        status: { type: string, enum: [enabled, disabled] }
     MenuPermissionNode:
       type: object
       additionalProperties: false

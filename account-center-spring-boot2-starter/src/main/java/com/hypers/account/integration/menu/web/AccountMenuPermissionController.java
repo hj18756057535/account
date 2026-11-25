@@ -46,6 +46,7 @@ public class AccountMenuPermissionController {
             @RequestBody MenuPermissionReplaceCommand command) {
         validator.validateReplace(appCode, protocolVersion, idempotencyKey, command);
         try {
+            if (command.getSelectedRoleIds() != null) validator.requireRoleSupport(handler.query(command));
             return validator.normalizeSnapshot(handler.replace(idempotencyKey, command));
         } catch (AccountIntegrationException exception) {
             throw exception;

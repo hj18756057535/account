@@ -2,9 +2,12 @@ package com.hypers.account.integration.menu;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hypers.account.integration.directory.AccountDirectoryRole;
 import com.hypers.account.integration.menu.security.AccountHmacSigner;
 import com.hypers.account.integration.menu.security.AccountMenuPermissionSignatureFilter;
 import com.hypers.account.integration.menu.security.InMemoryAccountNonceStore;
@@ -15,6 +18,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -131,6 +135,54 @@ class MenuPermissionContractTest {
             return;
         }
         throw new AssertionError("Expected duplicate selection to be rejected");
+    }
+
+    @Test
+    void roleAssignmentsUseExistingCatalogAndKeepLargeIdsAsStrings() throws Exception {
+        MenuPermissionSnapshot value = snapshot();
+        AccountDirectoryRole role = new AccountDirectoryRole();
+        role.setLocalRoleId("9007199254740993");
+        role.setName("Editor");
+        role.setStatus("enabled");
+        value.setRoles(Collections.singletonList(role));
+        value.setSelectedRoleIds(Collections.singletonList(role.getLocalRoleId()));
+        AtomicInteger writes = new AtomicInteger();
+        AccountMenuPermissionController controller = controller(value, writes);
+        MenuPermissionReplaceCommand command = command();
+        command.setSelectedRoleIds(Collections.singletonList(role.getLocalRoleId()));
+        MenuPermissionSnapshot result = controller.replace(AccountMenuPermissionProtocol.VERSION,
+                "idempotency-key-roles", command);
+        JsonNode json = new ObjectMapper().readTree(new ObjectMapper().writeValueAsString(result));
+        assertTrue(json.get("roles").get(0).get("localRoleId").isTextual());
+        assertEquals(role.getLocalRoleId(), json.get("selectedRoleIds").get(0).asText());
+        assertEquals(1, writes.get());
+    }
+
+    @Test
+    void roleUnsupportedApplicationRejectsAssignmentsBeforeAnyWrite() {
+        AtomicInteger writes = new AtomicInteger();
+        AccountMenuPermissionController controller = controller(snapshot(), writes);
+        MenuPermissionReplaceCommand command = command();
+        command.setSelectedRoleIds(Collections.singletonList("7"));
+        AccountIntegrationException error = assertThrows(AccountIntegrationException.class,
+                () -> controller.replace(AccountMenuPermissionProtocol.VERSION, "idempotency-key-roles", command));
+        assertEquals(422, error.getStatus());
+        assertEquals(0, writes.get());
+    }
+
+    private AccountMenuPermissionController controller(final MenuPermissionSnapshot value, final AtomicInteger writes) {
+        return new AccountMenuPermissionController("synthetic-app", new AccountMenuPermissionHandler() {
+            @Override
+            public MenuPermissionSnapshot query(MenuPermissionQuery query) {
+                return value;
+            }
+
+            @Override
+            public MenuPermissionSnapshot replace(String key, MenuPermissionReplaceCommand command) {
+                writes.incrementAndGet();
+                return value;
+            }
+        });
     }
 
     private MockHttpServletRequest request(

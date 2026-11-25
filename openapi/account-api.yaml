@@ -927,10 +927,10 @@ paths:
     get:
       tags: [ApplicationAccess]
       operationId: getUserApplicationMenuPermissions
-      summary: 查询已准入用户在目标应用中的菜单权限
+      summary: 查询已准入用户在目标应用中的角色与菜单授权
       description: >-
         仅管理员可调用。用户准入、应用同步、本地身份映射和 menu_permission_v1 capability
-        均有效时，Account 才会调用应用 Provider；Account 不保存菜单明细。
+        均有效时，Account 才会调用应用 Provider；Account 不保存权限明细，角色关联按应用返回的角色列表开放。
       security:
         - sessionCookie: []
       parameters:
@@ -962,10 +962,12 @@ paths:
     put:
       tags: [ApplicationAccess]
       operationId: replaceUserApplicationMenuPermissions
-      summary: 整集替换 Account 在目标应用中托管的菜单权限
+      summary: 更新用户与目标应用已有角色及菜单的授权关联
       description: >-
         仅管理员可调用；同一 Idempotency-Key 用于 Account 管理 API 和目标 Provider 的安全重试。
         空 selectedCodes 仅清空 Account 托管项，不影响应用原生角色权限。
+        角色选择省略时不改角色关系，空数组清空应用开放管理的角色关联。
+        菜单和角色目录由目标应用维护；Account 只转发用户授权关联，不新增、编辑或删除定义。
       security:
         - sessionCookie: []
       parameters:
@@ -1799,6 +1801,12 @@ components:
             minLength: 1
             maxLength: 128
             pattern: '^[\x21-\x7E]+$'
+        selectedRoleIds:
+          type: [array, 'null']
+          description: 当前用户与应用已提供角色的关联；未提供或 null 时不修改角色，空集合清空可管理范围内的关联
+          maxItems: 5000
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128 }
     MenuPermissionResponse:
       type: object
       additionalProperties: false
@@ -1837,6 +1845,18 @@ components:
           uniqueItems: true
           items:
             type: string
+        roles:
+          type: [array, 'null']
+          readOnly: true
+          description: 应用提供的已有可关联角色；null 或缺失表示不支持角色关联，非空值时必须同时提供 selectedRoleIds
+          maxItems: 10000
+          items: { $ref: '#/components/schemas/DirectoryRole' }
+        selectedRoleIds:
+          type: [array, 'null']
+          description: 当前用户在应用可管理范围内的角色关联，所有 ID 均为字符串
+          maxItems: 5000
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128 }
     MenuPermissionNode:
       type: object
       additionalProperties: false

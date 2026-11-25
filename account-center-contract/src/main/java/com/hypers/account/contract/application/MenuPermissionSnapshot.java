@@ -1,5 +1,6 @@
 package com.hypers.account.contract.application;
 
+import com.hypers.account.contract.directory.AccountDirectoryRole;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -24,4 +25,8 @@ public class MenuPermissionSnapshot {
     private List<String> selectedCodes = new ArrayList<>();
     @Builder.Default
     private List<String> inheritedCodes = new ArrayList<>();
+    /** 应用可关联的已有角色；为空值表示该应用不提供角色关联能力。 */
+    private List<AccountDirectoryRole> roles;
+    /** 当前用户在可管理角色范围内的关联，ID 始终为字符串。 */
+    private List<String> selectedRoleIds;
 }

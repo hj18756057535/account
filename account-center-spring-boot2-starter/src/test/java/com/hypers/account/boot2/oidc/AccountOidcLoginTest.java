@@ -1,6 +1,7 @@
 package com.hypers.account.boot2.oidc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -133,7 +134,7 @@ class AccountOidcLoginTest {
         MockHttpServletRequest redeem = new MockHttpServletRequest("POST", AccountOidcLogin.EXCHANGE_PATH);
         redeem.setCookies(cookie(completed, "-result"));
         redeem.addHeader(HttpHeaders.ORIGIN, "https://other.example.test");
-        assertThat(login.consumeSubject(redeem, new MockHttpServletResponse())).isNull();
+        assertThat(login.consumeIdentity(redeem, new MockHttpServletResponse())).isNull();
         redeem = new MockHttpServletRequest("POST", AccountOidcLogin.EXCHANGE_PATH);
         redeem.setCookies(cookie(completed, "-result"));
         redeem.addHeader(HttpHeaders.ORIGIN, CMS_ORIGIN);
@@ -142,7 +143,7 @@ class AccountOidcLoginTest {
         assertThat(identity.getIssuer()).isEqualTo(issuer);
         assertThat(identity.getAccount()).isEqualTo("fixture-account");
         assertThat(identity.getDisplayName()).isEqualTo("Fixture User");
-        assertThat(anotherInstance.consumeSubject(redeem, new MockHttpServletResponse())).isNull();
+        assertThat(anotherInstance.consumeIdentity(redeem, new MockHttpServletResponse())).isNull();
     }
 
     @Test
@@ -157,7 +158,7 @@ class AccountOidcLoginTest {
     }
 
     @Test
-    void upgradesAnAlreadyIssuedSubjectOnlyResultWithoutLosingItsIdentity() {
+    void rejectsMalformedIdentityResults() {
         MockHttpServletResponse start = new MockHttpServletResponse();
         URI authorization = login.begin(new MockHttpServletRequest("GET", AccountOidcLogin.START_PATH), start);
         nonce = parameter(authorization, "nonce");
@@ -167,7 +168,8 @@ class AccountOidcLoginTest {
         MockHttpServletRequest redeem = new MockHttpServletRequest("POST", AccountOidcLogin.EXCHANGE_PATH);
         redeem.setCookies(cookie(completed, "-result"));
         redeem.addHeader(HttpHeaders.ORIGIN, CMS_ORIGIN);
-        assertThat(login.consumeSubject(redeem, new MockHttpServletResponse())).isEqualTo(SUBJECT);
+        assertThatThrownBy(() -> login.consumeIdentity(redeem, new MockHttpServletResponse()))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @ParameterizedTest

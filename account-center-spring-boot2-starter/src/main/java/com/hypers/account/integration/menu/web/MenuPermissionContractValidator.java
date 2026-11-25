@@ -6,6 +6,7 @@ import com.hypers.account.integration.menu.MenuPermissionNode;
 import com.hypers.account.integration.menu.MenuPermissionQuery;
 import com.hypers.account.integration.menu.MenuPermissionReplaceCommand;
 import com.hypers.account.integration.menu.MenuPermissionSnapshot;
+import com.hypers.account.integration.directory.AccountDirectoryRole;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,7 +48,9 @@ final class MenuPermissionContractValidator {
                 || !text(command.getExpectedPermissionRevision(), 1, 256)
                 || command.getSelectedCodes() == null
                 || command.getSelectedCodes().size() > AccountMenuPermissionProtocol.MAX_SELECTED_CODES
-                || !validCodes(command.getSelectedCodes())) {
+                || !validCodes(command.getSelectedCodes())
+                || command.getSelectedRoleIds() != null && (command.getSelectedRoleIds().size() > AccountMenuPermissionProtocol.MAX_SELECTED_CODES
+                || !validCodes(command.getSelectedRoleIds()))) {
             fail(422, "PERMISSION_CODE_INVALID");
         }
     }
@@ -86,6 +89,7 @@ final class MenuPermissionContractValidator {
         for (String code : snapshot.getInheritedCodes()) {
             if (!byCode.containsKey(code)) fail(422, "CATALOG_INVALID");
         }
+        validateRoles(snapshot);
         List<MenuPermissionNode> nodes = new ArrayList<MenuPermissionNode>(snapshot.getNodes());
         Collections.sort(nodes, new Comparator<MenuPermissionNode>() {
             @Override
@@ -98,6 +102,36 @@ final class MenuPermissionContractValidator {
         snapshot.setSelectedCodes(new ArrayList<String>(snapshot.getSelectedCodes()));
         snapshot.setInheritedCodes(new ArrayList<String>(snapshot.getInheritedCodes()));
         return snapshot;
+    }
+
+    void requireRoleSupport(MenuPermissionSnapshot snapshot) {
+        if (normalizeSnapshot(snapshot).getRoles() == null) fail(422, "PERMISSION_CODE_INVALID");
+    }
+
+    private void validateRoles(MenuPermissionSnapshot snapshot) {
+        if (snapshot.getRoles() == null) {
+            if (snapshot.getSelectedRoleIds() != null) fail(422, "CATALOG_INVALID");
+            return;
+        }
+        if (snapshot.getRoles().size() > AccountMenuPermissionProtocol.MAX_NODES
+                || snapshot.getSelectedRoleIds() == null
+                || snapshot.getSelectedRoleIds().size() > AccountMenuPermissionProtocol.MAX_SELECTED_CODES) {
+            fail(422, "CATALOG_INVALID");
+        }
+        Set<String> ids = new HashSet<String>();
+        for (AccountDirectoryRole role : snapshot.getRoles()) {
+            if (role == null || !printableAscii(role.getLocalRoleId(), 1, 128)
+                    || !ids.add(role.getLocalRoleId())
+                    || !("enabled".equals(role.getStatus()) || "disabled".equals(role.getStatus()))
+                    || role.getCode() != null && !text(role.getCode(), 1, 128)
+                    || role.getName() != null && !text(role.getName(), 1, 256)) {
+                fail(422, "CATALOG_INVALID");
+            }
+        }
+        Set<String> selected = new HashSet<String>();
+        for (String id : snapshot.getSelectedRoleIds()) {
+            if (!ids.contains(id) || !selected.add(id)) fail(422, "CATALOG_INVALID");
+        }
     }
 
     private void validateSubject(String expectedAppCode, MenuPermissionQuery query) {

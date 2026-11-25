@@ -65,6 +65,7 @@ public class ApplicationMenuPermissionService {
                           String expectedCatalogRevision,
                           String expectedPermissionRevision,
                           List<String> selectedCodes,
+                          List<String> selectedRoleIds,
                           String locale,
                           String idempotencyKey,
                           String operatorId) {
@@ -76,7 +77,8 @@ public class ApplicationMenuPermissionService {
         if (subject.access.getVersion() != expectedAccessVersion) {
             throw new BusinessException(ErrorCode.ACCESS_CONFLICT);
         }
-        validateSelectedCodes(selectedCodes);
+        validateSelection(selectedCodes, "selectedCodes");
+        if (selectedRoleIds != null) validateSelection(selectedRoleIds, "selectedRoleIds");
         MenuPermissionReplaceCommand command = MenuPermissionReplaceCommand.builder()
                 .protocolVersion(MenuPermissionProtocol.VERSION)
                 .appCode(appCode)
@@ -87,13 +89,14 @@ public class ApplicationMenuPermissionService {
                 .expectedCatalogRevision(expectedCatalogRevision)
                 .expectedPermissionRevision(expectedPermissionRevision)
                 .selectedCodes(selectedCodes)
+                .selectedRoleIds(selectedRoleIds)
                 .build();
         try {
             MenuPermissionSnapshot snapshot = client.replace(subject.application, idempotencyKey, command);
             audit.log(operatorId, "APPLICATION_MENU_PERMISSION_REPLACED", "USER_APPLICATION",
                     userId + ":" + appCode,
                     auditDetail(expectedAccessVersion, expectedCatalogRevision,
-                            expectedPermissionRevision, selectedCodes, snapshot));
+                            expectedPermissionRevision, selectedCodes, selectedRoleIds, snapshot));
             return new Result(subject.access.getVersion(), snapshot);
         } catch (ApplicationMenuPermissionFailure failure) {
             throw apiFailure(failure);
@@ -135,12 +138,12 @@ public class ApplicationMenuPermissionService {
         }
     }
 
-    private void validateSelectedCodes(List<String> selectedCodes) {
+    private void validateSelection(List<String> selectedCodes, String field) {
         if (selectedCodes == null || selectedCodes.size() > MenuPermissionProtocol.MAX_SELECTED_CODES
                 || new LinkedHashSet<>(selectedCodes).size() != selectedCodes.size()
                 || selectedCodes.stream().anyMatch(code -> !printableAscii(code, 1, 128))) {
             Map<String, String> fields = new LinkedHashMap<>();
-            fields.put("selectedCodes", "validation.menuPermissionCodes");
+            fields.put(field, "validation.menuPermissionCodes");
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, fields);
         }
     }
@@ -157,6 +160,7 @@ public class ApplicationMenuPermissionService {
                                String catalogRevision,
                                String permissionRevision,
                                List<String> selectedCodes,
+                               List<String> selectedRoleIds,
                                MenuPermissionSnapshot result) {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("accessVersion", accessVersion);
@@ -165,6 +169,10 @@ public class ApplicationMenuPermissionService {
         detail.put("selectedCount", selectedCodes.size());
         detail.put("resultPermissionRevision", result.getPermissionRevision());
         detail.put("selectionDigest", digest(selectedCodes));
+        if (selectedRoleIds != null) {
+            detail.put("selectedRoleCount", selectedRoleIds.size());
+            detail.put("roleSelectionDigest", digest(selectedRoleIds));
+        }
         try {
             return json.writeValueAsString(detail);
         } catch (JsonProcessingException exception) {
