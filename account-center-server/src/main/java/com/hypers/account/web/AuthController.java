@@ -1,5 +1,6 @@
 package com.hypers.account.web;
 
+import com.hypers.account.app.exception.BusinessException;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AccountSessionUser;
 import jakarta.servlet.http.HttpSession;
@@ -50,13 +51,8 @@ public class AuthController {
                 return "redirect:" + redirectUrl;
             }
             return "redirect:/";
-        } catch (IllegalArgumentException e) {
-            String key = switch (String.valueOf(e.getMessage())) {
-                case "账号已禁用" -> "error.accountDisabled";
-                case "该账号未设置密码，请联系管理员" -> "error.passwordNotSet";
-                default -> "error.credentials";
-            };
-            redirectAttributes.addFlashAttribute("error", messages.text(request, key));
+        } catch (BusinessException e) {
+            redirectAttributes.addFlashAttribute("error", messages.text(request, e.getMessageKey()));
             return "redirect:/login";
         }
     }

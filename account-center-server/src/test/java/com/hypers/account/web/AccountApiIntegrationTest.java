@@ -227,7 +227,7 @@ class AccountApiIntegrationTest {
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":\"" + userId + "\",\"appCode\":\"cms-ai\"}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/users/" + userId + "/status")
                         .session(managementSession)

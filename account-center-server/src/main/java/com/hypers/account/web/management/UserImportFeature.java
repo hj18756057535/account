@@ -10,9 +10,8 @@ public class UserImportFeature {
     private final Environment environment;
 
     public boolean enabled() {
-        // 导入使用数据库事务；演示内存 Store 不暴露无法原子回滚的入口。
+        // 导入依赖数据库事务和管理端接口，两者都开启时才暴露入口。
         return environment.getProperty("account.user-import.enabled", Boolean.class, true)
-                && environment.getProperty("account.console-api.enabled", Boolean.class, true)
-                && "mybatis".equals(environment.getProperty("account.store.type", "mybatis"));
+                && environment.getProperty("account.console-api.enabled", Boolean.class, true);
     }
 }

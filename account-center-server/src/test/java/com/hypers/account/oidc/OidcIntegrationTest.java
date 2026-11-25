@@ -7,14 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.RegisterApplicationCommand;
-import com.hypers.account.app.SaveUserCommand;
-import com.hypers.account.app.SaveApplicationCommand;
-import com.hypers.account.app.ApplicationSyncStore;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
+import com.hypers.account.app.command.RegisterApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.command.SaveApplicationCommand;
 import com.hypers.account.auth.AccountLoginService;
+import com.hypers.account.mapper.OidcAuthorizationMapper;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.web.AuthController;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -83,15 +84,15 @@ class OidcIntegrationTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper json;
-    @Autowired private AccountDirectoryService directory;
-    @Autowired private AccountStore accountStore;
+    @Autowired private UserManagementService userService;
+    @Autowired private ApplicationManagementService applicationService;
+    @Autowired private UserApplicationAccessService accessService;
     @Autowired private AccountLoginService login;
     @Autowired private OAuth2AuthorizationService authorizations;
-    @Autowired private OidcAuthorizationStore authorizationStore;
+    @Autowired private OidcAuthorizationMapper authorizationMapper;
     @Autowired private OidcClientRepository clients;
     @Autowired private OidcProperties properties;
     @Autowired private OidcAccessPolicy policy;
-    @Autowired private ApplicationSyncStore synchronizationStore;
     @Autowired private Clock clock;
     @Autowired private JwtDecoder applicationDecoder;
     @Autowired private JWKSource<SecurityContext> signingKeys;
@@ -114,14 +115,14 @@ class OidcIntegrationTest {
 
     @BeforeEach
     void registerUserAndApplication() {
-        directory.registerApplication(new RegisterApplicationCommand(CLIENT, "OIDC Agent",
+        applicationService.registerApplication(new RegisterApplicationCommand(CLIENT, "OIDC Agent",
                 "http://localhost:9000", CALLBACK, "http://localhost:9000/permissions",
                 "", CLIENT_SECRET, "default"));
-        accountStore.updateApplicationStatus(CLIENT, "enabled");
-        user = directory.createUser(new SaveUserCommand("oidc-" + UUID.randomUUID(),
+        applicationService.changeManagedApplicationStatus(CLIENT, "enabled", applicationService.getApplication(CLIENT).getVersion(), null);
+        user = userService.createUser(new SaveUserCommand("oidc-" + UUID.randomUUID(),
                 "oidc@example.test", "OIDC Test User", "10000000000"));
-        accountStore.setUserPassword(user.getId(), login.encodePassword(PASSWORD));
-        directory.authorize(user.getId(), CLIENT);
+        userService.updatePassword(user.getId(), login.encodePassword(PASSWORD));
+        accessService.authorize(user.getId(), CLIENT);
     }
 
     @Test
@@ -189,7 +190,7 @@ class OidcIntegrationTest {
 
     @Test
     void noApplicationAccessReturnsStandardAccessDenied() throws Exception {
-        directory.deauthorize(user.getId(), CLIENT);
+        accessService.deauthorize(user.getId(), CLIENT);
         var response = authorize(session(), challenge(VERIFIER), CALLBACK).getResponse();
         assertThat(response.getRedirectedUrl()).contains("error=access_denied");
         assertThat(response.getRedirectedUrl()).doesNotContain("code=");
@@ -224,7 +225,7 @@ class OidcIntegrationTest {
     @Test
     void revokedAccessCannotExchangePreviouslyIssuedCode() throws Exception {
         String code = code(authorize(session(), challenge(VERIFIER), CALLBACK));
-        directory.deauthorize(user.getId(), CLIENT);
+        accessService.deauthorize(user.getId(), CLIENT);
         var result = exchange(code, VERIFIER, CLIENT_SECRET);
         assertThat(result.getResponse().getStatus()).isEqualTo(400);
         assertThat(body(result).path("error").asText()).isEqualTo("invalid_grant");
@@ -233,7 +234,7 @@ class OidcIntegrationTest {
     @Test
     void revokedAccessCannotUsePreviouslyIssuedAccessToken() throws Exception {
         var tokens = body(exchange(code(authorize(session(), challenge(VERIFIER), CALLBACK)), VERIFIER, CLIENT_SECRET));
-        directory.deauthorize(user.getId(), CLIENT);
+        accessService.deauthorize(user.getId(), CLIENT);
         mvc.perform(get("/userinfo").header("Authorization", "Bearer " + tokens.path("access_token").asText()))
                 .andExpect(status().isUnauthorized());
     }
@@ -241,7 +242,7 @@ class OidcIntegrationTest {
     @Test
     void disabledUserCannotReuseAnExistingAccountSession() throws Exception {
         var session = session();
-        accountStore.updateUserStatus(user.getId(), "disabled");
+        userService.changeManagedUserStatus(user.getId(), "disabled", userService.getUser(user.getId()).getVersion(), null);
         var response = authorize(session, challenge(VERIFIER), CALLBACK).getResponse();
         assertThat(response.getRedirectedUrl()).endsWith("/login");
     }
@@ -281,7 +282,7 @@ class OidcIntegrationTest {
     @Test
     void anotherServiceInstanceRestoresCodeAndSigningKey() throws Exception {
         String value = code(authorize(session(), challenge(VERIFIER), CALLBACK));
-        var another = new PersistentOidcAuthorizationService(authorizationStore, clients, policy, clock);
+        var another = new PersistentOidcAuthorizationService(authorizationMapper, clients, policy, clock);
         assertThat(another.findByToken(value, new OAuth2TokenType("code")).getPrincipalName()).isEqualTo(user.getId());
         var config = new OidcConfiguration();
         var reloaded = config.oidcKeys(properties, new DefaultResourceLoader());
@@ -311,12 +312,12 @@ class OidcIntegrationTest {
 
     @Test
     void oidcOnlyManagedApplicationDoesNotRequireAUserSyncProvider() throws Exception {
-        var app = directory.createManagedApplication(new SaveApplicationCommand("oidc-managed", "Managed Agent",
+        var app = applicationService.createManagedApplication(new SaveApplicationCommand("oidc-managed", "Managed Agent",
                 "http://localhost:9000", CALLBACK, "http://localhost:9000/permissions",
                 "", "default", CLIENT_SECRET, 0), user.getId());
-        accountStore.saveApplicationAccess(user.getId(), app.getAppCode(), "enabled", 0, user.getId());
+        accessService.changeUserApplicationAccess(user.getId(), app.getAppCode(), "enabled", 0, user.getId(), null);
 
-        assertThat(accountStore.isAuthorized(user.getId(), app.getAppCode())).isTrue();
+        assertThat(accessService.isAuthorized(user.getId(), app.getAppCode())).isTrue();
         var result = mvc.perform(get("/oauth2/authorize").session(session())
                 .queryParam("client_id", app.getAppCode()).queryParam("redirect_uri", CALLBACK)
                 .queryParam("response_type", "code").queryParam("scope", "openid profile")
@@ -324,14 +325,14 @@ class OidcIntegrationTest {
                 .queryParam("code_challenge", challenge(VERIFIER)).queryParam("code_challenge_method", "S256"))
                 .andReturn();
         assertThat(code(result)).isNotBlank();
-        accountStore.saveApplicationAccess(user.getId(), app.getAppCode(), "disabled", 1, user.getId());
+        accessService.changeUserApplicationAccess(user.getId(), app.getAppCode(), "disabled", 1, user.getId(), null);
         assertThat(policy.allows(user.getId(), app.getAppCode())).isFalse();
     }
 
     @Test
     void introspectionDoesNotReportRevokedUserAccessAsActive() throws Exception {
         var tokens = body(exchange(code(authorize(session(), challenge(VERIFIER), CALLBACK)), VERIFIER, CLIENT_SECRET));
-        directory.deauthorize(user.getId(), CLIENT);
+        accessService.deauthorize(user.getId(), CLIENT);
         var basic = Base64.getEncoder().encodeToString((CLIENT + ":" + CLIENT_SECRET).getBytes(StandardCharsets.UTF_8));
         var result = mvc.perform(post("/oauth2/introspect").header("Authorization", "Basic " + basic)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -356,7 +357,7 @@ class OidcIntegrationTest {
     @Test
     void disabledApplicationRejectsPreviouslyIssuedAccessToken() throws Exception {
         var tokens = body(exchange(code(authorize(session(), challenge(VERIFIER), CALLBACK)), VERIFIER, CLIENT_SECRET));
-        accountStore.updateApplicationStatus(CLIENT, "disabled");
+        applicationService.changeManagedApplicationStatus(CLIENT, "disabled", applicationService.getApplication(CLIENT).getVersion(), null);
         mvc.perform(get("/userinfo").header("Authorization", "Bearer " + tokens.path("access_token").asText()))
                 .andExpect(status().isUnauthorized());
     }

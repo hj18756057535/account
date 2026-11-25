@@ -1,14 +1,14 @@
 package com.hypers.account.web.management;
 
-import com.hypers.account.app.PageResult;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.audit.AuditLog;
 import com.hypers.account.audit.AuditLogService;
 import com.hypers.account.audit.AuditPageQuery;
-import java.time.Instant;
+import com.hypers.account.common.PageResult;
+import com.hypers.account.web.management.service.AuditEventView;
 import java.util.Collections;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 管理端审计查询接口，只做参数校验与视图转换。 */
 @RestController
 @RequestMapping("/api/audit-events")
 @RequiredArgsConstructor
@@ -26,7 +27,7 @@ public class ManagementAuditController {
     private final AuditLogService auditLogService;
 
     @GetMapping
-    public PageResult<AuditEventResponse> list(
+    public PageResult<AuditEventView> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String operatorId,
@@ -41,18 +42,18 @@ public class ManagementAuditController {
                 normalize("targetType", targetType, 64), normalize("targetId", targetId, 128),
                 normalize("traceId", traceId, 64));
         PageResult<AuditLog> result = auditLogService.findEvents(query);
-        return new PageResult<>(result.getItems().stream().map(AuditEventResponse::from).toList(),
+        return new PageResult<>(result.getItems().stream().map(AuditEventView::from).toList(),
                 result.getPage(), result.getSize(), result.getTotal());
     }
 
     @GetMapping("/{id}")
-    public AuditEventResponse get(@PathVariable String id) {
+    public AuditEventView get(@PathVariable String id) {
         if (id.isBlank() || id.length() > 64) throw invalid("id");
         AuditLog event = auditLogService.findEvent(id);
         if (event == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "AUDIT_EVENT_NOT_FOUND", "error.auditNotFound");
+            throw new BusinessException(ErrorCode.AUDIT_EVENT_NOT_FOUND);
         }
-        return AuditEventResponse.from(event);
+        return AuditEventView.from(event);
     }
 
     private String normalize(String field, String value, int maxLength) {
@@ -61,30 +62,8 @@ public class ManagementAuditController {
         return value.trim();
     }
 
-    private ApiException invalid(String field) {
-        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_FAILED", "error.validation",
+    private BusinessException invalid(String field) {
+        return new BusinessException(ErrorCode.VALIDATION_FAILED,
                 Collections.singletonMap(field, "validation.auditFilter"));
-    }
-
-    @Value
-    public static class AuditEventResponse {
-        String id;
-        String operatorId;
-        String operationType;
-        String targetType;
-        String targetId;
-        String outcome;
-        String traceId;
-        Instant createdAt;
-
-        static AuditEventResponse from(AuditLog log) {
-            boolean managementTarget = log.getTargetType() != null
-                    && Set.of("USER", "APPLICATION", "USER_APPLICATION").contains(log.getTargetType());
-            String outcome = log.getOutcome();
-            if (outcome == null || !Set.of("success", "failure").contains(outcome)) outcome = "unknown";
-            return new AuditEventResponse(log.getId(), log.getOperatorId(), log.getOperationType(),
-                    log.getTargetType(), managementTarget ? log.getTargetId() : null,
-                    outcome, log.getTraceId(), log.getCreatedAt());
-        }
     }
 }

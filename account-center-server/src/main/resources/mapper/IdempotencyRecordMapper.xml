@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hypers.account.mapper.IdempotencyRecordMapper">
 
-    <resultMap id="idempotencyRecordResultMap" type="com.hypers.account.app.IdempotencyRecord">
+    <resultMap id="idempotencyRecordResultMap" type="com.hypers.account.app.model.IdempotencyRecord">
         <id property="id" column="id"/>
         <result property="idempotencyKey" column="idempotency_key"/>
         <result property="operatorId" column="operator_id"/>

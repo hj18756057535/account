@@ -5,7 +5,7 @@
 <mapper namespace="com.hypers.account.mapper.AccountUserApplicationMapper">
 
     <!-- 应用字段映射（复用 applicationResultMap 结构，用于 JOIN 查询） -->
-    <resultMap id="applicationResultMap" type="com.hypers.account.app.AccountApplication">
+    <resultMap id="applicationResultMap" type="com.hypers.account.app.model.AccountApplication">
         <id property="appCode" column="app_code"/>
         <result property="name" column="name"/>
         <result property="entryUrl" column="entry_url"/>
@@ -24,7 +24,7 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
-    <resultMap id="applicationAccessResultMap" type="com.hypers.account.app.ApplicationAccess">
+    <resultMap id="applicationAccessResultMap" type="com.hypers.account.app.model.ApplicationAccess">
         <result property="userId" column="user_id"/>
         <result property="appCode" column="app_code"/>
         <result property="desiredStatus" column="desired_status"/>

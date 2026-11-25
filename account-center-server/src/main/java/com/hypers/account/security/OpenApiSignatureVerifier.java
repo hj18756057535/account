@@ -1,7 +1,7 @@
 package com.hypers.account.security;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.service.ApplicationManagementService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,16 +13,16 @@ public class OpenApiSignatureVerifier {
 
     private static final Duration ALLOWED_SKEW = Duration.ofMinutes(5);
 
-    private final AccountDirectoryService directoryService;
+    private final ApplicationManagementService applicationService;
     private final HmacSignatureService signatureService;
     private final InMemoryNonceStore nonceStore;
     private final Clock clock;
 
-    public OpenApiSignatureVerifier(AccountDirectoryService directoryService,
+    public OpenApiSignatureVerifier(ApplicationManagementService applicationService,
                                     HmacSignatureService signatureService,
                                     InMemoryNonceStore nonceStore,
                                     Clock clock) {
-        this.directoryService = directoryService;
+        this.applicationService = applicationService;
         this.signatureService = signatureService;
         this.nonceStore = nonceStore;
         this.clock = clock;
@@ -41,7 +41,7 @@ public class OpenApiSignatureVerifier {
         if (!nonceStore.markIfAbsent(appCode, nonce, purpose, now.plus(ALLOWED_SKEW))) {
             throw unauthorized("nonce has been used");
         }
-        AccountApplication application = directoryService.getApplication(appCode);
+        AccountApplication application = applicationService.getApplication(appCode);
         if ("disabled".equals(application.getStatus())) {
             throw unauthorized("application is disabled");
         }

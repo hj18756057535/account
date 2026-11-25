@@ -1,7 +1,7 @@
 package com.hypers.account.audit;
 
 import com.hypers.account.mapper.AuditLogMapper;
-import com.hypers.account.app.PageResult;
+import com.hypers.account.common.PageResult;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;

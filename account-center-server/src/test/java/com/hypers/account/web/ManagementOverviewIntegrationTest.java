@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.audit.AuditLogService;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AccountSessionUser;
@@ -32,7 +32,7 @@ class ManagementOverviewIntegrationTest {
     @Autowired private MockMvc mvc;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private AdminRoleMapper roles;
-    @Autowired private AccountStore store;
+    @Autowired private UserManagementService userService;
     @Autowired private AccountLoginService login;
     @Autowired private AuditLogService audit;
     @Autowired private ObjectMapper json;
@@ -45,7 +45,7 @@ class ManagementOverviewIntegrationTest {
                 .andExpect(jsonPath("$.counts.users").value(0))
                 .andExpect(jsonPath("$.insights").isEmpty())
                 .andExpect(jsonPath("$.downstreamStatus").value("not_checked"));
-        var user = store.saveNewUser(new SaveUserCommand("overview-user", "test@example.com", "Test", "123"));
+        var user = userService.createManagedUser(new SaveUserCommand("overview-user", "test@example.com", "Test", "123"), null);
         jdbc.update("update account_users set status='disabled', updated_at=? where id=?",
                 java.sql.Timestamp.from(java.time.Instant.now().minus(31, java.time.temporal.ChronoUnit.DAYS)), user.getId());
         jdbc.update("insert into account_applications (app_code, name, secret, status, entry_url, sso_callback_url, permission_iframe_url, notify_base_url) values ('overview-app','Test','synthetic-secret','enabled','https://example.com','','','')");
@@ -78,8 +78,8 @@ class ManagementOverviewIntegrationTest {
 
     @Test
     void loginSuccessFailureAndCsrfDenialAreAuditedWithoutCredentials() throws Exception {
-        var user = store.saveNewUser(new SaveUserCommand("login-overview", "test@example.com", "Test", "123"));
-        store.setUserPassword(user.getId(), login.encodePassword("synthetic-password"));
+        var user = userService.createManagedUser(new SaveUserCommand("login-overview", "test@example.com", "Test", "123"), null);
+        userService.updatePassword(user.getId(), login.encodePassword("synthetic-password"));
         roles.insert(user.getId(), "ACCOUNT_ADMIN");
         var initial = mvc.perform(get("/api/session")).andReturn();
         var session = (MockHttpSession) initial.getRequest().getSession(false);

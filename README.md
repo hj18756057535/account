@@ -10,9 +10,8 @@
 
 ### Excel 用户导入
 
-默认启用，无需增加启动参数；升级重启后重新登录/刷新会话，管理员用户列表显示“导入用户”。
-可通过 `--account.user-import.enabled=false` 显式关闭。功能仅支持 MyBatis
-数据库 Store；内存演示模式不提供无法原子回滚的导入入口。关闭开关后全部导入端点拒绝，
+默认启用，无需增加启动参数；升级重启后重新登录/刷新会话，管理员用户列表显示"导入用户"。
+可通过 `--account.user-import.enabled=false` 显式关闭。功能依赖数据库事务；关闭开关后全部导入端点拒绝，
 普通用户 CRUD 保持不变。不需要配置客户接口或应用白名单。
 
 - 下载 XLSX 模板，按 account/email/name/phone 四列填写文本；手机号保留前导零。
@@ -29,7 +28,7 @@
 
 - Server 的管理 API、旧票据/签名错误、兜底及登录/SSO 模板支持简体中文、繁体中文、英文、越南语；Starter 的集成错误保留现有中英支持。只翻译展示消息，业务编码、数据和签名保持不变；未知内部错误不直接返回给调用方。SSR 页面使用浏览器请求语言，不读取 Vue 的 localStorage。
 
-- 统一审计由 `audit/AuditMetadataProvider`、`AuditSqlInterceptor` 和 `mapper/AuditFields.xml` 提供；业务 INSERT 引用 `insertColumns/insertValues`，UPDATE 引用 `updateFields`。SQL 绑定前从可信会话或内部命令填入参数，无操作人时记录 system；不接收前端审计字段，更新不覆盖创建字段。内存 Store 使用同一填充器。最新 V1 直接包含全部审计字段，不保留历史回填。
+- 统一审计由 `audit/AuditMetadataProvider`、`AuditSqlInterceptor` 和 `mapper/AuditFields.xml` 提供；业务 INSERT 引用 `insertColumns/insertValues`，UPDATE 引用 `updateFields`。SQL 绑定前从可信会话或内部命令填入参数，无操作人时记录 system；不接收前端审计字段，更新不覆盖创建字段。最新 V1 直接包含全部审计字段，不保留历史回填。
 
 - 需求正文统一保存在工作区 `requirements/features/ACCOUNT-001/requirement.md`；当前待办、授权来源和验证边界见 [工作区计划](../docs/account-center/账号中心-计划.md)，既有规格、设计与审批按需追溯。保留 [架构说明](docs/architecture.md)、[接入指南](docs/integration-guide.md) 与 [菜单权限联调说明](docs/menu-permission-integration.md)。
 - 数据库现采用完整初始化基线：[PostgreSQL SQL](account-center-server/src/main/resources/db/vendor/postgresql/V1__init_account_center.sql)、[MySQL SQL](account-center-server/src/main/resources/db/vendor/mysql/V1__init_account_center.sql)。每份包含 14 张表、166 个字段、约束、索引及全部数据库注释，不再保留未发布的增量脚本或重复 schema.sql。
@@ -100,7 +99,7 @@ account-center/
 ├── account-center-server/               # 服务端模块；Java、资源、测试唯一事实源
 │   └── src/
 │       ├── main/java/com/hypers/account/
-│       │   ├── app/                     # 领域模型、Store、Service
+│       │   ├── app/                     # 领域模型、Command、Service、下游适配
 │       │   ├── auth/                    # 登录认证
 │       │   ├── admin/                   # 管理 ticket
 │       │   ├── audit/                   # 审计日志
@@ -121,13 +120,11 @@ account-center/
 ## 分层架构
 
 ```
-Controller → Service → Store(接口) → MyBatisAccountStore → Mapper → 数据库
-                                    → InMemoryAccountStore (测试)
+Controller → Service → Mapper → Mapper XML → 数据库
 ```
 
 - **Controller** — 参数校验、请求路由
-- **Service** — 业务编排
-- **Store** — 数据访问抽象
+- **Service** — 业务编排、实体构建与异常翻译，按需注入 Mapper
 - **Mapper** — MyBatis SQL 映射
 
 ## API 概览
@@ -185,7 +182,7 @@ Spring Boot 业务应用引入 `account-center-spring-boot-starter` 即可同时
 | 不引入 Spring Security | 仅使用 `spring-security-crypto` 做 BCrypt，避免自动配置干扰 |
 | MyBatis 而非 JPA | SQL 与 Java 分离，方便 DBA 审核和调优 |
 | Flyway 迁移 | 版本化管理数据库变更，支持多环境自动迁移 |
-| Store 模式 | 数据访问抽象层，测试时可切换为 InMemoryAccountStore |
+| 持久化 | Service 直接使用 MyBatis Mapper，不保留 Store / Repository 中间层；测试连 H2 验证真实 SQL |
 | 三模块边界 | Server 与 Starter 分别只依赖 Contract；Server 不依赖 Starter |
 | 双向 Starter | 自动装配 Account Client；业务应用实现 `AccountUserSyncHandler` 后暴露受 HMAC 保护的同步端点 |
 | 同步使用 HTTP | 当前建立同步契约骨架；持久化 Outbox 在后续业务系统接入切片实现 |

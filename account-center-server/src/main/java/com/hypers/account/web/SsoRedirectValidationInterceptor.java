@@ -1,17 +1,19 @@
 package com.hypers.account.web;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.service.ApplicationManagementService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+/** 校验 SSO 跳转的回调地址与应用登记一致，防止开放重定向。 */
 public class SsoRedirectValidationInterceptor implements HandlerInterceptor {
 
-    private final AccountDirectoryService directoryService;
+    private final ApplicationManagementService applicationService;
 
-    public SsoRedirectValidationInterceptor(AccountDirectoryService directoryService) {
-        this.directoryService = directoryService;
+    public SsoRedirectValidationInterceptor(ApplicationManagementService applicationService) {
+        this.applicationService = applicationService;
     }
 
     @Override
@@ -22,12 +24,12 @@ public class SsoRedirectValidationInterceptor implements HandlerInterceptor {
             return true;
         }
         try {
-            AccountApplication application = directoryService.getApplication(appCode);
+            AccountApplication application = applicationService.getApplication(appCode);
             if (!redirectUri.equals(application.getSsoCallbackUrl())) {
                 response.sendRedirect("/sso/error?code=callbackMismatch");
                 return false;
             }
-        } catch (IllegalArgumentException ignored) {
+        } catch (BusinessException ignored) {
             return true;
         }
         return true;

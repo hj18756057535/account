@@ -1,5 +1,7 @@
 package com.hypers.account.admin;
 
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.exception.BusinessException;
 import com.hypers.account.mapper.AdminTicketMapper;
 import java.time.Clock;
 import java.time.Duration;
@@ -39,23 +41,27 @@ public class AdminTicketService {
     /**
      * 验证 admin ticket。
      * 校验存在、匹配应用、未过期、未使用，通过后标记已使用并返回 payload。
-     * 验证失败抛出 IllegalArgumentException。
+     * 验证失败抛出带国际化消息键的业务异常。
      */
     public AdminTicketPayload verify(String appCode, String ticket) {
         // 检查 ticket 是否有效（存在、未过期、匹配应用编码）
         Integer valid = ticketMapper.countValid(ticket, appCode, FORMATTER.format(clock.instant()));
         if (valid == null || valid == 0) {
-            throw new IllegalArgumentException("ticket 无效或已过期");
+            throw invalidTicket();
         }
         // 检查是否已被使用（一次性凭证）
         Integer used = ticketMapper.countUsed(ticket);
         if (used != null && used > 0) {
-            throw new IllegalArgumentException("ticket 已被使用");
+            throw invalidTicket();
         }
         // 标记已使用
         ticketMapper.markUsed(ticket);
         // 获取关联的用户 ID
         String userId = ticketMapper.selectUserIdByCode(ticket);
         return new AdminTicketPayload(appCode, userId);
+    }
+
+    private BusinessException invalidTicket() {
+        return new BusinessException(ErrorCode.TICKET_INVALID);
     }
 }

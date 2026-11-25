@@ -1,19 +1,21 @@
 package com.hypers.account.app;
 
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.ApplicationSyncFailure;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.hypers.account.config.ApplicationSyncProperties;
 import java.net.URI;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
 
 class ApplicationSyncPolicyTest {
     @Test
     void registeredTargetIsAuthoritativeAndLoopbackWorksOutsideTheTestProfile() {
         var properties = new ApplicationSyncProperties();
 
-        var policy = new ApplicationSyncPolicy(properties, new MockEnvironment());
+        var policy = new ApplicationSyncPolicy(properties);
         var app = new AccountApplication("cms-ai", "CMS", "http://localhost:8850",
                 "http://localhost:8850/callback", "http://localhost:8850", "http://localhost:9101",
                 "synthetic-secret", "default");

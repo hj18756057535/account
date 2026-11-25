@@ -1,11 +1,26 @@
 package com.hypers.account.web.management;
 
-import com.hypers.account.app.ApplicationMenuPermissionService;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.service.ApplicationMenuPermissionService;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.auth.AccountSessionUser;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.application.MenuPermissionNode;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.web.ApiMessages;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.web.AuthController;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.web.management.service.IdempotencyService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -85,9 +100,8 @@ public class ManagementMenuPermissionController {
         }
     }
 
-    private ApiException validation(String field, String key) {
-        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_FAILED", "error.validation",
-                Collections.singletonMap(field, key));
+    private BusinessException validation(String field, String key) {
+        return new BusinessException(ErrorCode.VALIDATION_FAILED, Collections.singletonMap(field, key));
     }
 
     @Getter

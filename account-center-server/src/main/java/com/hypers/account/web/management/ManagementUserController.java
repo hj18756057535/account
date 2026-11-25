@@ -1,12 +1,32 @@
 package com.hypers.account.web.management;
 
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.PageResult;
-import com.hypers.account.app.SaveUserCommand;
-import com.hypers.account.app.UserPageQuery;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.command.UserPageQuery;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.service.UserManagementService;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.common.PageResult;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.auth.AccountSessionUser;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.web.AuthController;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.web.management.service.IdempotencyService;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.web.management.service.ManagementUserWriteService;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -50,7 +70,7 @@ public class ManagementUserController {
     private static final Set<String> SORT_FIELDS = new java.util.HashSet<>(Arrays.asList("createdAt", "account", "name"));
     private static final Set<String> SORT_DIRECTIONS = new java.util.HashSet<>(Arrays.asList("asc", "desc"));
 
-    private final AccountDirectoryService directoryService;
+    private final UserManagementService userService;
     private final ManagementUserWriteService writeService;
     private final IdempotencyService idempotencyService;
 
@@ -80,7 +100,7 @@ public class ManagementUserController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
         UserPageQuery pageQuery = toQuery(page, size, query, status, sort);
-        PageResult<AccountUser> result = directoryService.findUsersPage(pageQuery);
+        PageResult<AccountUser> result = userService.findUsersPage(pageQuery);
         List<UserResponse> items = result.getItems().stream()
                 .map(UserResponse::from)
                 .collect(Collectors.toList());
@@ -90,11 +110,7 @@ public class ManagementUserController {
     @GetMapping("/{userId}")
     public UserResponse getUser(@PathVariable String userId) {
         validateUserId(userId);
-        try {
-            return UserResponse.from(directoryService.getUser(userId));
-        } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "error.userNotFound");
-        }
+        return UserResponse.from(userService.getUser(userId));
     }
 
     @PutMapping("/{userId}")
@@ -174,9 +190,8 @@ public class ManagementUserController {
                 sortParts[1].toLowerCase(Locale.ROOT));
     }
 
-    private ApiException validation(String field, String message) {
-        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                "VALIDATION_FAILED", "error.validation", java.util.Collections.singletonMap(field, message));
+    private BusinessException validation(String field, String message) {
+        return new BusinessException(ErrorCode.VALIDATION_FAILED, java.util.Collections.singletonMap(field, message));
     }
 
     private void validateUserId(String userId) {

@@ -1,6 +1,6 @@
 package com.hypers.account.mapper;
 
-import com.hypers.account.app.IdempotencyRecord;
+import com.hypers.account.app.model.IdempotencyRecord;
 import java.time.Instant;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

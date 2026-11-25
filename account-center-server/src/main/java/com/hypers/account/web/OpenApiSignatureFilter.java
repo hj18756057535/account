@@ -3,7 +3,7 @@ package com.hypers.account.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
+import com.hypers.account.app.model.AccountApplication;
 import com.hypers.account.security.OpenApiSignatureVerifier;
 import java.io.IOException;
 import jakarta.servlet.FilterChain;

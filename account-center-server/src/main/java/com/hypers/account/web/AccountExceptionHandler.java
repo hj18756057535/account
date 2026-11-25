@@ -1,7 +1,6 @@
 package com.hypers.account.web;
 
-import com.hypers.account.app.http.ApplicationSyncException;
-import com.hypers.account.sso.SsoTicketException;
+import com.hypers.account.app.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
@@ -42,28 +41,15 @@ public class AccountExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex,
-                                                              HttpServletRequest request) {
-        String key = switch (String.valueOf(ex.getMessage())) {
-            case "user not found" -> "error.userNotFound";
-            case "application not found" -> "error.applicationNotFound";
-            case "application access not found" -> "error.resourceNotFound";
-            case "application is disabled" -> "error.applicationDisabled";
-            case "user is disabled", "user is not authorized for application" -> "error.accessDenied";
-            case "ticket 无效或已过期", "ticket 已被使用" -> "error.ticket";
-            default -> "error.invalidRequest";
-        };
-        return ResponseEntity.badRequest().body(new ErrorResponse(messages.text(request, key)));
+                                                             HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(messages.text(request, "error.invalidRequest")));
     }
 
-    @ExceptionHandler(SsoTicketException.class)
-    public ResponseEntity<ErrorResponse> handleSsoTicket(SsoTicketException ex, HttpServletRequest request) {
-        return ResponseEntity.badRequest().body(new ErrorResponse(messages.text(request, "error.ticket")));
-    }
-
-    /** 应用同步失败返回 502，表示上游应用不可用 */
-    @ExceptionHandler(ApplicationSyncException.class)
-    public ResponseEntity<ErrorResponse> handleSyncException(ApplicationSyncException ex, HttpServletRequest request) {
-        return ResponseEntity.status(502).body(new ErrorResponse(messages.text(request, "error.sync")));
+    /** 业务异常自带状态和国际化消息键，不在这里拼接文案。 */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusiness(BusinessException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getStatus())
+                .body(new ErrorResponse(messages.text(request, ex.getMessageKey())));
     }
 
     @Value

@@ -8,11 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.RegisterApplicationCommand;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.command.RegisterApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.security.HmacSignatureService;
@@ -42,7 +44,13 @@ class SecurityRegressionTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AccountDirectoryService directoryService;
+    private UserManagementService userService;
+
+    @Autowired
+    private ApplicationManagementService applicationService;
+
+    @Autowired
+    private UserApplicationAccessService accessService;
 
     @Autowired
     private SsoTicketService ticketService;
@@ -111,12 +119,12 @@ class SecurityRegressionTest {
     @Test
     void ssoExchangeRejectsMissingSignatureHeaders() throws Exception {
         AccountApplication application = registerApp("signed-sso", "http://localhost:9003/callback");
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "signed-user",
                 "signed@example.com",
                 "签名用户",
                 "13800000000"));
-        directoryService.authorize(user.getId(), application.getAppCode());
+        accessService.authorize(user.getId(), application.getAppCode());
         String code = ticketService.issue(application.getAppCode(), new AccountUserSnapshot(
                 user.getId(),
                 user.getAccount(),
@@ -134,12 +142,12 @@ class SecurityRegressionTest {
     @Test
     void ssoExchangeAcceptsValidSignatureHeaders() throws Exception {
         AccountApplication application = registerApp("signed-ok", "http://localhost:9003/callback");
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "signed-ok-user",
                 "signed-ok@example.com",
                 "签名成功用户",
                 "13800000000"));
-        directoryService.authorize(user.getId(), application.getAppCode());
+        accessService.authorize(user.getId(), application.getAppCode());
         String code = ticketService.issue(application.getAppCode(), new AccountUserSnapshot(
                 user.getId(),
                 user.getAccount(),
@@ -160,7 +168,7 @@ class SecurityRegressionTest {
     @Test
     void adminTicketCannotBeIssuedForUnauthorizedUserApplicationPair() throws Exception {
         registerApp("ticket-app", "http://localhost:9003/callback");
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "ticket-user",
                 "ticket@example.com",
                 "票据用户",
@@ -176,12 +184,12 @@ class SecurityRegressionTest {
     @Test
     void adminTicketVerifyRejectsMissingSignatureHeaders() throws Exception {
         AccountApplication application = registerApp("ticket-signed", "http://localhost:9003/callback");
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "ticket-signed-user",
                 "ticket-signed@example.com",
                 "票据签名用户",
                 "13800000000"));
-        directoryService.authorize(user.getId(), application.getAppCode());
+        accessService.authorize(user.getId(), application.getAppCode());
         String ticket = mockMvc.perform(post("/api/admin-tickets")
                         .sessionAttr(AuthController.SESSION_USER_KEY, adminSession())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -200,7 +208,7 @@ class SecurityRegressionTest {
     }
 
     private AccountApplication registerApp(String appCode, String callbackUrl) {
-        return directoryService.registerApplication(new RegisterApplicationCommand(
+        return applicationService.registerApplication(new RegisterApplicationCommand(
                 appCode,
                 appCode,
                 "http://localhost:9003",

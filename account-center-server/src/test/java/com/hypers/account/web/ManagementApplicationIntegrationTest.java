@@ -1,5 +1,6 @@
 package com.hypers.account.web;
 
+import com.hypers.account.web.management.service.ManagementApplicationWriteService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.hasItem;
@@ -14,15 +15,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.SaveUserCommand;
-import com.hypers.account.app.SaveApplicationCommand;
+import com.hypers.account.app.command.SaveApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.audit.AuditLogService;
 import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.web.management.CsrfTokenManager;
-import com.hypers.account.web.management.ManagementApplicationWriteService.CreatedApplication;
+import com.hypers.account.web.management.service.ManagementApplicationWriteService.CreatedApplication;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,7 +50,13 @@ class ManagementApplicationIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AccountDirectoryService directoryService;
+    private UserManagementService userService;
+
+    @Autowired
+    private ApplicationManagementService applicationService;
+
+    @Autowired
+    private UserApplicationAccessService accessService;
 
     @Autowired
     private AdminRoleMapper adminRoleMapper;
@@ -206,7 +215,7 @@ class ManagementApplicationIntegrationTest {
     void configuredAccessChangeIsPendingUntilConfirmedAndBlockedForDisabledApplications() throws Exception {
         ManagementSession management = managementSession(adminSession());
         createApplication(management, "access-app", "access-app-create");
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "access-user", "access@example.com", "准入用户", "13800000111"));
 
         mockMvc.perform(get("/api/users/" + user.getId() + "/application-access")
@@ -265,7 +274,7 @@ class ManagementApplicationIntegrationTest {
                         .content("{\"status\":\"disabled\",\"version\":1,\"reason\":\"维护停用\"}"))
                 .andExpect(status().isOk());
 
-        AccountUser blockedUser = directoryService.createUser(new SaveUserCommand(
+        AccountUser blockedUser = userService.createUser(new SaveUserCommand(
                 "blocked-user", "blocked@example.com", "禁用应用用户", "13800000112"));
         mockMvc.perform(put("/api/users/" + blockedUser.getId()
                                 + "/application-access/access-app")
@@ -277,7 +286,7 @@ class ManagementApplicationIntegrationTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("APPLICATION_DISABLED"));
 
-        AccountUser auditor = directoryService.createUser(new SaveUserCommand(
+        AccountUser auditor = userService.createUser(new SaveUserCommand(
                 "access-auditor", "auditor@example.com", "准入审计员", "13800000113"));
         adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
         ManagementSession auditSession = managementSession(
@@ -294,9 +303,9 @@ class ManagementApplicationIntegrationTest {
 
     @Test
     void pureSsoAccessDoesNotWaitForUserSynchronization() throws Exception {
-        directoryService.createManagedApplication(new SaveApplicationCommand("sso-only", "SSO",
+        applicationService.createManagedApplication(new SaveApplicationCommand("sso-only", "SSO",
                 "http://localhost:8850", "http://localhost:8850/callback", "", "", "default", "synthetic-secret", 0), "admin-user");
-        AccountUser user = directoryService.createUser(new SaveUserCommand("sso-user", "", "SSO user", ""));
+        AccountUser user = userService.createUser(new SaveUserCommand("sso-user", "", "SSO user", ""));
         ManagementSession admin = managementSession(adminSession());
         mockMvc.perform(put("/api/users/{userId}/application-access/sso-only", user.getId())
                         .session(admin.session()).header(CsrfTokenManager.HEADER_NAME, admin.csrfToken())
@@ -306,7 +315,7 @@ class ManagementApplicationIntegrationTest {
                 .andExpect(jsonPath("$.integrationStatus").value("not_required"));
         assertThat(jdbcTemplate.queryForObject("select count(*) from account_sync_commands where user_id = ? and app_code = ?",
                 Integer.class, user.getId(), "sso-only")).isZero();
-        assertThat(directoryService.getUserAuthorizedApplications(user.getId()))
+        assertThat(accessService.getUserAuthorizedApplications(user.getId()))
                 .extracting("appCode").contains("sso-only");
         mockMvc.perform(put("/api/users/{userId}/application-access/sso-only", user.getId())
                         .session(admin.session()).header(CsrfTokenManager.HEADER_NAME, admin.csrfToken())
@@ -314,13 +323,13 @@ class ManagementApplicationIntegrationTest {
                         .content("{\"status\":\"disabled\",\"version\":1}"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.desiredStatus").value("disabled"));
-        assertThat(directoryService.isAuthorized(user.getId(), "sso-only")).isFalse();
+        assertThat(accessService.isAuthorized(user.getId(), "sso-only")).isFalse();
     }
 
     @Test
     void directoryWritesRequireAdministratorSessionAndCsrfBeforeCallingAProvider() throws Exception {
         ManagementSession admin = managementSession(adminSession());
-        AccountUser auditor = directoryService.createUser(new SaveUserCommand("directory-auditor", "", "Auditor", ""));
+        AccountUser auditor = userService.createUser(new SaveUserCommand("directory-auditor", "", "Auditor", ""));
         adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
         ManagementSession audit = managementSession(new AccountSessionUser(auditor.getId(), auditor.getAccount(), auditor.getName()));
         for (String suffix : new String[] {"connection-check", "directory-imports", "directory-imports/fixture/commit"}) {
@@ -341,7 +350,7 @@ class ManagementApplicationIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
 
-        AccountUser auditor = directoryService.createUser(new SaveUserCommand(
+        AccountUser auditor = userService.createUser(new SaveUserCommand(
                 "menu-auditor", "menu-auditor@example.com", "菜单审计员", "13800000114"));
         adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
         ManagementSession auditSession = managementSession(

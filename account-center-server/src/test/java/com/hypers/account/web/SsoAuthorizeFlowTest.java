@@ -4,11 +4,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.RegisterApplicationCommand;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.command.RegisterApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
+
 import com.hypers.account.auth.AccountLoginService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,13 +33,16 @@ class SsoAuthorizeFlowTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private AccountDirectoryService directoryService;
+    private UserManagementService userService;
+
+    @Autowired
+    private ApplicationManagementService applicationService;
+
+    @Autowired
+    private UserApplicationAccessService accessService;
 
     @Autowired
     private AccountLoginService loginService;
-
-    @Autowired
-    private AccountStore store;
 
     @Test
     void unauthenticatedUserRedirectsToLoginPage() throws Exception {
@@ -54,17 +59,17 @@ class SsoAuthorizeFlowTest {
     @Test
     void authenticatedAndAuthorizedUserGetsRedirectWithCode() throws Exception {
         // 创建应用和用户，设置密码，授权
-        directoryService.registerApplication(new RegisterApplicationCommand(
+        applicationService.registerApplication(new RegisterApplicationCommand(
                 "cms-ai", "双碳服务", "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
                 "", "secret", "default"));
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "testuser", "test@example.com", "测试", "13800000000"));
         // 通过 store 设置密码
         String encoded = loginService.encodePassword("password123");
-        store.setUserPassword(user.getId(), encoded);
-        directoryService.authorize(user.getId(), "cms-ai");
+        userService.updatePassword(user.getId(), encoded);
+        accessService.authorize(user.getId(), "cms-ai");
 
         // 登录并保持 session
         MockHttpSession session = new MockHttpSession();
@@ -91,15 +96,15 @@ class SsoAuthorizeFlowTest {
     @Test
     void authenticatedButUnauthorizedUserSeesErrorPage() throws Exception {
         // 创建应用和用户，但不授权
-        directoryService.registerApplication(new RegisterApplicationCommand(
+        applicationService.registerApplication(new RegisterApplicationCommand(
                 "cms-ai", "双碳服务", "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
                 "", "secret", "default"));
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "noperm", "noperm@example.com", "无权限", "13800000000"));
         String encoded = loginService.encodePassword("password123");
-        store.setUserPassword(user.getId(), encoded);
+        userService.updatePassword(user.getId(), encoded);
 
         // 登录并保持 session
         MockHttpSession session = new MockHttpSession();
@@ -125,15 +130,15 @@ class SsoAuthorizeFlowTest {
 
     @Test
     void loginWithWrongPasswordRedirectsWithError() throws Exception {
-        directoryService.registerApplication(new RegisterApplicationCommand(
+        applicationService.registerApplication(new RegisterApplicationCommand(
                 "cms-ai", "双碳服务", "http://localhost:9003",
                 "http://localhost:9003/callback",
                 "http://localhost:9003/permissions",
                 "", "secret", "default"));
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "testuser", "test@example.com", "测试", "13800000000"));
         String encoded = loginService.encodePassword("correct");
-        store.setUserPassword(user.getId(), encoded);
+        userService.updatePassword(user.getId(), encoded);
 
         // 错误密码应重定向回登录页
         mockMvc.perform(post("/login")

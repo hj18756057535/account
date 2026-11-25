@@ -1,7 +1,7 @@
 package com.hypers.account.mapper;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.SaveApplicationCommand;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.command.SaveApplicationCommand;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

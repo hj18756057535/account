@@ -11,10 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.UserManagementService;
+
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.audit.AuditLogService;
@@ -43,10 +43,7 @@ class ManagementApiIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AccountDirectoryService directoryService;
-
-    @Autowired
-    private AccountStore accountStore;
+    private UserManagementService userService;
 
     @Autowired
     private AccountLoginService loginService;
@@ -77,9 +74,9 @@ class ManagementApiIntegrationTest {
 
     @Test
     void loginRequiresCsrfAndReturnsOnlyManagementCapabilities() throws Exception {
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "console-admin", "console-admin@example.com", "控制台管理员", "13800000001"));
-        accountStore.setUserPassword(user.getId(), loginService.encodePassword("safe-password"));
+        userService.updatePassword(user.getId(), loginService.encodePassword("safe-password"));
         adminRoleMapper.insert(user.getId(), "ACCOUNT_ADMIN");
 
         MvcResult sessionResult = mockMvc.perform(get("/api/session"))
@@ -138,14 +135,14 @@ class ManagementApiIntegrationTest {
 
     @Test
     void adminAndAuditorCanReadStableUserPagesButOrdinaryUserCannot() throws Exception {
-        AccountUser alpha = directoryService.createUser(new SaveUserCommand(
+        AccountUser alpha = userService.createUser(new SaveUserCommand(
                 "alpha-user", "alpha@example.com", "Alpha", "13800000002"));
-        directoryService.createUser(new SaveUserCommand(
+        userService.createUser(new SaveUserCommand(
                 "beta-user", "beta@example.com", "Beta", "13800000003"));
-        directoryService.createUser(new SaveUserCommand(
+        userService.createUser(new SaveUserCommand(
                 "gamma-user", "gamma@example.com", "Gamma", "13800000004"));
 
-        AccountUser auditor = directoryService.createUser(new SaveUserCommand(
+        AccountUser auditor = userService.createUser(new SaveUserCommand(
                 "auditor-user", "auditor@example.com", "审计员", "13800000005"));
         adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
 
@@ -275,7 +272,7 @@ class ManagementApiIntegrationTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.fieldErrors['Idempotency-Key']").exists());
 
-        AccountUser auditor = directoryService.createUser(new SaveUserCommand(
+        AccountUser auditor = userService.createUser(new SaveUserCommand(
                 "write-auditor", "write-auditor@example.com", "只读审计员", "13800000008"));
         adminRoleMapper.insert(auditor.getId(), "ACCOUNT_AUDITOR");
         session.setAttribute(AuthController.SESSION_USER_KEY,
@@ -340,7 +337,7 @@ class ManagementApiIntegrationTest {
 
     @Test
     void disablingCurrentOrLastEnabledAdminIsRejected() throws Exception {
-        AccountUser targetAdmin = directoryService.createUser(new SaveUserCommand(
+        AccountUser targetAdmin = userService.createUser(new SaveUserCommand(
                 "protected-admin", "protected@example.com", "受保护管理员", "13800000010"));
         adminRoleMapper.insert(targetAdmin.getId(), "ACCOUNT_ADMIN");
 

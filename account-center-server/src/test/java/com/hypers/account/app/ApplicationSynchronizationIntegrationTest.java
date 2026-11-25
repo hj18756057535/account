@@ -1,5 +1,19 @@
 package com.hypers.account.app;
 
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.command.SaveApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.ApplicationAccess;
+import com.hypers.account.app.model.ApplicationSyncDelivery;
+import com.hypers.account.app.model.ApplicationSyncFailure;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
+import com.hypers.account.app.service.ApplicationSyncTransport;
+import com.hypers.account.app.service.ApplicationSynchronizationService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
+import com.hypers.account.mapper.ApplicationSyncMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,20 +28,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.config.ApplicationSyncProperties;
 import com.hypers.account.app.directory.ApplicationUserLink;
-import com.hypers.account.app.directory.DirectoryImportStore;
+import com.hypers.account.mapper.DirectoryImportMapper;
 import com.hypers.account.app.http.ManagedApplicationSyncTransport;
 import com.hypers.account.contract.application.AccountUserSyncResult;
 import com.hypers.account.security.HmacSignatureService;
 import com.hypers.account.sso.AccountUserSnapshot;
 import com.hypers.account.sso.SsoTicketService;
-import com.hypers.account.sso.SsoTicketException;
 import com.hypers.account.web.SsoTicketController;
 import com.sun.net.httpserver.HttpServer;
 import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.web.AuthController;
-import com.hypers.account.web.management.ApiException;
 import com.hypers.account.web.management.CsrfTokenManager;
-import com.hypers.account.web.management.ManagementApplicationWriteService;
+import com.hypers.account.web.management.service.ManagementApplicationWriteService;
 import java.net.URI;
 import java.net.InetSocketAddress;
 import java.time.Clock;
@@ -58,10 +70,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ApplicationSynchronizationIntegrationTest {
-    @Autowired private AccountDirectoryService directory;
+    @Autowired private UserManagementService userService;
+    @Autowired private ApplicationManagementService applicationService;
+    @Autowired private UserApplicationAccessService accessService;
     @Autowired private ManagementApplicationWriteService writes;
     @Autowired private ApplicationSynchronizationService service;
-    @Autowired private ApplicationSyncStore store;
+    @Autowired private ApplicationSyncMapper store;
     @Autowired private ApplicationSyncProperties properties;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private MockMvc mvc;
@@ -70,7 +84,7 @@ class ApplicationSynchronizationIntegrationTest {
     @Autowired private ApplicationSyncPolicy policy;
     @Autowired private SsoTicketService tickets;
     @Autowired private SsoTicketController ticketController;
-    @Autowired private DirectoryImportStore directoryImports;
+    @Autowired private DirectoryImportMapper directoryImports;
     @MockitoBean private ApplicationSyncTransport transport;
     private String userId;
     private String appCode;
@@ -78,9 +92,9 @@ class ApplicationSynchronizationIntegrationTest {
     @BeforeEach
     void setup() {
         appCode = "sync-" + UUID.randomUUID().toString().substring(0, 8);
-        userId = directory.createManagedUser(new SaveUserCommand(appCode, appCode + "@example.invalid",
+        userId = userService.createManagedUser(new SaveUserCommand(appCode, appCode + "@example.invalid",
                 "Synthetic", "001"), "admin-user").getId();
-        directory.createManagedApplication(new SaveApplicationCommand(appCode, "Synthetic",
+        applicationService.createManagedApplication(new SaveApplicationCommand(appCode, "Synthetic",
                 "https://example.invalid", "https://example.invalid/callback", "https://example.invalid/permissions",
                 "https://example.invalid", "default", "synthetic-secret", 0), "admin-user");
         properties.setEnabled(true);
@@ -103,8 +117,8 @@ class ApplicationSynchronizationIntegrationTest {
 
         jdbc.update("update account_applications set notify_base_url = ?, version = version + 1 where app_code = ?",
                 "https://example.invalid", appCode);
-        ApplicationAccess current = directory.getUserApplicationAccess(userId, appCode);
-        service.decorate(current, directory.getApplication(appCode));
+        ApplicationAccess current = accessService.getUserApplicationAccess(userId, appCode);
+        service.decorate(current, applicationService.getApplication(appCode));
         assertThat(current.isRetryable()).isTrue();
         ApplicationAccess scheduled = service.retry(userId, appCode, current.getVersion(), "admin-user");
         assertThat(scheduled.getVersion()).isEqualTo(2);
@@ -121,7 +135,7 @@ class ApplicationSynchronizationIntegrationTest {
                 .isEqualTo("9007199254740993");
         service.process(access.getSyncCommandId());
         assertThat(store.state(userId, appCode).getLocalUserId()).isEqualTo("9007199254740993");
-        assertThat(directory.isAuthorized(userId, appCode)).isTrue();
+        assertThat(accessService.isAuthorized(userId, appCode)).isTrue();
     }
 
     @Test
@@ -133,7 +147,7 @@ class ApplicationSynchronizationIntegrationTest {
         assertThat(conflicted.getErrorCode()).as("status=%s attempts=%s", conflicted.getStatus(), conflicted.getAttempts())
                 .isEqualTo("SYNC_IDENTITY_CONFLICT");
         assertThat(store.state(userId, appCode)).isNull();
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
     }
 
     private void addSourceLink() {
@@ -172,7 +186,7 @@ class ApplicationSynchronizationIntegrationTest {
             service.process(access.getSyncCommandId());
             assertThat(store.find(access.getSyncCommandId()).getStatus()).isEqualTo("succeeded");
             assertThat(store.state(userId, appCode).getLocalUserId()).isEqualTo("synthetic-http-user");
-            assertThat(directory.isAuthorized(userId, appCode)).isTrue();
+            assertThat(accessService.isAuthorized(userId, appCode)).isTrue();
         } finally { server.stop(0); }
     }
 
@@ -185,22 +199,22 @@ class ApplicationSynchronizationIntegrationTest {
         var exchange = new SsoTicketController.ExchangeTicketRequest();
         exchange.setAppCode(appCode);
         exchange.setCode(code);
-        assertThatThrownBy(() -> ticketController.exchange(exchange)).isInstanceOf(SsoTicketException.class);
+        assertThatThrownBy(() -> ticketController.exchange(exchange)).isInstanceOf(BusinessException.class);
     }
 
     @Test
     void confirmsMappingAndRequiresMatchingVersionEvenWhenDeliveryIsSwitchedOff() {
         var access = change("enabled", 0, false);
         assertThat(access.getIntegrationStatus()).isEqualTo("pending");
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
         service.process(access.getSyncCommandId());
         var state = store.state(userId, appCode);
         assertThat(state.getLocalUserId()).isEqualTo("local-" + userId);
         assertThat(state.getAppliedVersion()).isEqualTo(1);
         assertThat(state.getCreatedBy()).isEqualTo("admin-user");
-        assertThat(directory.isAuthorized(userId, appCode)).isTrue();
+        assertThat(accessService.isAuthorized(userId, appCode)).isTrue();
         assertThat(store.find(access.getSyncCommandId()).getPayloadJson()).isNull();
-        var listed = directory.getUserApplicationAccess(userId).stream()
+        var listed = accessService.getUserApplicationAccess(userId).stream()
                 .filter(row -> appCode.equals(row.getAppCode())).findFirst().orElseThrow();
         assertThat(listed.getIntegrationStatus()).isEqualTo("succeeded");
         assertThat(listed.getLastSyncedAt()).isNotNull();
@@ -208,25 +222,27 @@ class ApplicationSynchronizationIntegrationTest {
         var disabled = change("disabled", 1, false);
         assertThat(disabled.getAppliedVersion()).isEqualTo(1);
 
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
-        assertThatThrownBy(() -> change("enabled", 2, false)).isInstanceOf(ApiException.class);
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
+        assertThatThrownBy(() -> change("enabled", 2, false)).isInstanceOf(BusinessException.class);
         var enabled = change("enabled", 2, true);
         assertThat(enabled.getVersion()).isEqualTo(3);
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
         properties.setEnabled(true);
         service.retry(userId, appCode, 3, "admin-user");
         service.process(enabled.getSyncCommandId());
-        assertThat(directory.isAuthorized(userId, appCode)).isTrue();
+        assertThat(accessService.isAuthorized(userId, appCode)).isTrue();
         jdbc.update("update account_users set status = 'disabled' where id = ?", userId);
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
     }
 
     @Test
     void retriesFixedPayloadAndStopsAfterFiveAttempts() {
-        doThrow(new ApplicationSyncFailure("SYNC_DEPENDENCY_UNAVAILABLE", true)).when(transport).send(any(), any());
+        doThrow(new ApplicationSyncFailure(ErrorCode.SYNC_DEPENDENCY_UNAVAILABLE, true)).when(transport).send(any(), any());
         var access = change("enabled", 0, false);
         var first = store.find(access.getSyncCommandId());
-        directory.updateUserFields(userId, new SaveUserCommand(appCode, "changed@example.invalid", "Changed", "002"));
+        userService.updateManagedUser(userId,
+                new SaveUserCommand(appCode, "changed@example.invalid", "Changed", "002"),
+                userService.getUser(userId).getVersion(), null);
         for (int attempt = 1; attempt <= 5; attempt++) {
             jdbc.update("update account_sync_commands set next_retry_at = null where id = ?", first.getId());
             service.process(first.getId());
@@ -236,7 +252,7 @@ class ApplicationSynchronizationIntegrationTest {
             assertThat(current.getIdempotencyKey()).isEqualTo(first.getIdempotencyKey());
             assertThat(current.getStatus()).isEqualTo(attempt < 5 ? "retry_wait" : "failed");
         }
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
         service.retry(userId, appCode, 1, "admin-user");
         assertThat(store.find(first.getId()).getPayloadJson()).isEqualTo(first.getPayloadJson());
         assertThat(store.find(first.getId()).getAttempts()).isZero();
@@ -244,7 +260,7 @@ class ApplicationSynchronizationIntegrationTest {
         service.process(first.getId());
         assertThat(store.find(first.getId()).getStatus()).isEqualTo("expired");
         assertThat(store.find(first.getId()).getPayloadJson()).isNull();
-        assertThatThrownBy(() -> service.retry(userId, appCode, 1, "admin-user")).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> service.retry(userId, appCode, 1, "admin-user")).isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -268,7 +284,7 @@ class ApplicationSynchronizationIntegrationTest {
         doAnswer(call -> result(call.getArgument(0), "local-current")).when(transport).send(any(), any());
         service.process(latest.getId());
         assertThat(store.state(userId, appCode).getAppliedStatus()).isEqualTo("disabled");
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
     }
 
     @Test
@@ -301,7 +317,7 @@ class ApplicationSynchronizationIntegrationTest {
         var first = change("enabled", 0, false);
         service.process(first.getSyncCommandId());
         assertThat(store.find(first.getSyncCommandId()).getStatus()).as("first identity confirmation").isEqualTo("succeeded");
-        String other = directory.createManagedUser(new SaveUserCommand(appCode + "-other", "other@example.invalid",
+        String other = userService.createManagedUser(new SaveUserCommand(appCode + "-other", "other@example.invalid",
                 "Other", "002"), "admin-user").getId();
         var access = writes.changeAccess(other, appCode, "enabled", 0, "synthetic", "admin-user");
         service.process(access.getSyncCommandId());
@@ -314,7 +330,7 @@ class ApplicationSynchronizationIntegrationTest {
         jdbc.update("update account_applications set version = version + 1 where app_code = ?", appCode);
         service.process(disabled.getSyncCommandId());
         assertThat(store.find(disabled.getSyncCommandId()).getErrorCode()).isEqualTo("SYNC_TARGET_CHANGED");
-        assertThat(directory.isAuthorized(userId, appCode)).isFalse();
+        assertThat(accessService.isAuthorized(userId, appCode)).isFalse();
     }
 
     @Test

@@ -1,7 +1,8 @@
 package com.hypers.account.oidc;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountStore;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.service.ApplicationManagementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
@@ -12,10 +13,13 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-/** 页面登记的应用与当前 Secret 是 OIDC 客户端的事实源。 */
+/**
+ * 页面登记的应用与当前 Secret 是 OIDC 客户端的事实源。
+ * 只读取应用主数据，不单独维护一份 OIDC 客户端表。
+ */
 @RequiredArgsConstructor
 public class OidcClientRepository implements RegisteredClientRepository {
-    private final AccountStore store;
+    private final ApplicationManagementService applicationService;
     private final OidcProperties properties;
 
     @Override
@@ -33,8 +37,8 @@ public class OidcClientRepository implements RegisteredClientRepository {
         var settings = properties.getClients().get(clientId);
         AccountApplication application;
         try {
-            application = store.requireApplication(clientId);
-        } catch (IllegalArgumentException exception) {
+            application = applicationService.getApplication(clientId);
+        } catch (BusinessException exception) {
             return null;
         }
         if (!"enabled".equals(application.getStatus()) || !"active".equals(application.getSecretState())

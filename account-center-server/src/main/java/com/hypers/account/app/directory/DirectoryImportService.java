@@ -2,14 +2,16 @@ package com.hypers.account.app.directory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountAlreadyExistsException;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.audit.AuditLogService;
+import com.hypers.account.mapper.DirectoryImportMapper;
 import com.hypers.account.contract.directory.AccountDirectoryUser;
-import com.hypers.account.web.management.ApiException;
 import com.hypers.account.web.management.UserImportFeature;
 import java.time.Clock;
 import java.time.Duration;
@@ -33,8 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DirectoryImportService {
-    private final AccountStore accounts;
-    private final DirectoryImportStore imports;
+    private final UserManagementService userService;
+    private final ApplicationManagementService applicationService;
+    private final DirectoryImportMapper imports;
     private final ApplicationDirectoryClient client;
     private final ObjectMapper json;
     private final Clock clock;
@@ -107,7 +110,7 @@ public class DirectoryImportService {
             }
         }
         try {
-            Map<String, AccountUser> created = accounts.saveNewUsers(commands, disabled, operatorId).stream()
+            Map<String, AccountUser> created = userService.createUsers(commands, disabled, operatorId).stream()
                     .collect(Collectors.toMap(AccountUser::getAccount, Function.identity()));
             List<ApplicationUserLink> links = new ArrayList<>();
             Set<String> existingLinkIds = imports.links(appCode).stream().map(ApplicationUserLink::getLocalUserId)
@@ -125,7 +128,9 @@ public class DirectoryImportService {
                     links.add(link);
                 }
             }
-            imports.insertLinks(links);
+            if (!links.isEmpty()) {
+                imports.insertLinks(links);
+            }
             DirectoryImportResult result = new DirectoryImportResult();
             result.setImportId(id);
             result.setAppCode(appCode);
@@ -143,7 +148,7 @@ public class DirectoryImportService {
                     "{\"created\":" + created.size() + ",\"reused\":" + result.getReusedUsers()
                             + ",\"roles\":" + result.getRoles() + ",\"organizations\":" + result.getOrganizations() + "}");
             return result;
-        } catch (AccountAlreadyExistsException | DataIntegrityViolationException error) {
+        } catch (BusinessException | DataIntegrityViolationException error) {
             throw identityConflict();
         }
     }
@@ -182,7 +187,7 @@ public class DirectoryImportService {
     private Map<String, AccountUser> matches(ApplicationDirectorySnapshot snapshot, Map<String, ApplicationUserLink> known) {
         List<String> names = snapshot.getUsers().stream().map(AccountDirectoryUser::getAccount).toList();
         List<String> ids = known.values().stream().map(ApplicationUserLink::getUserId).distinct().toList();
-        List<AccountUser> existing = accounts.findUsersByAccountsOrIds(names, ids);
+        List<AccountUser> existing = userService.findByIdsOrAccounts(names, ids);
         Map<String, AccountUser> byName = existing.stream().collect(Collectors.toMap(AccountUser::getAccount, Function.identity()));
         Map<String, AccountUser> byId = existing.stream().collect(Collectors.toMap(AccountUser::getId, Function.identity()));
         Map<String, String> sourceByUser = known.values().stream().collect(Collectors.toMap(ApplicationUserLink::getUserId,
@@ -214,7 +219,7 @@ public class DirectoryImportService {
             if (account == null || account.isBlank() || account.length() > 128 || !account.equals(account.trim())
                     || text(user.getName()).length() > 128 || text(user.getEmail()).length() > 255
                     || text(user.getPhone()).length() > 64 || !ids.add(user.getLocalUserId()) || !names.add(account)) {
-                throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "DIRECTORY_RESULT_INVALID", "directory.invalid");
+                throw new BusinessException(ErrorCode.DIRECTORY_RESULT_INVALID);
             }
         }
     }
@@ -222,19 +227,19 @@ public class DirectoryImportService {
     private DirectoryImportRecord record(String appCode, String id, String operator) {
         DirectoryImportRecord record = imports.find(id);
         if (record == null || !appCode.equals(record.getAppCode()) || !operator.equals(record.getOperatorId())) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "error.resourceNotFound");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
         if (!"committed".equals(record.getStatus()) && !record.getExpiresAt().isAfter(clock.instant())) {
-            throw new ApiException(HttpStatus.GONE, "DIRECTORY_PREVIEW_EXPIRED", "directory.expired");
+            throw new BusinessException(ErrorCode.DIRECTORY_PREVIEW_EXPIRED);
         }
         return record;
     }
 
     private AccountApplication application(String code) {
         try {
-            return accounts.requireApplication(code);
-        } catch (IllegalArgumentException error) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "error.resourceNotFound");
+            return applicationService.getApplication(code);
+        } catch (BusinessException error) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
     }
 
@@ -244,7 +249,7 @@ public class DirectoryImportService {
 
     private void requireEnabled() {
         if (!feature.enabled()) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "USER_IMPORT_DISABLED", "import.disabled");
+            throw new BusinessException(ErrorCode.USER_IMPORT_DISABLED);
         }
     }
 
@@ -252,12 +257,12 @@ public class DirectoryImportService {
         return value == null ? "" : value;
     }
 
-    private ApiException changed() {
-        return new ApiException(HttpStatus.CONFLICT, "DIRECTORY_PREVIEW_CHANGED", "directory.changed");
+    private BusinessException changed() {
+        return new BusinessException(ErrorCode.DIRECTORY_PREVIEW_CHANGED);
     }
 
-    private ApiException identityConflict() {
-        return new ApiException(HttpStatus.CONFLICT, "DIRECTORY_IDENTITY_CONFLICT", "directory.identityConflict");
+    private BusinessException identityConflict() {
+        return new BusinessException(ErrorCode.DIRECTORY_IDENTITY_CONFLICT);
     }
 
     private String serialize(Object value) {

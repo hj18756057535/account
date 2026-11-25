@@ -7,7 +7,7 @@
 当前为未投入使用的全新开发阶段，执行 [工作区阶段规则](../AGENTS.md#当前开发阶段)：直接维护最新模型，不保留无用兼容；初始化 SQL 可合并重整，实际开发库不自动清理。
 
 1. 先基于仓库事实判断包归属、服务边界、表归属、配置入口和既有实现模式。
-2. 不确定时先搜索现有 Controller、Service、Store、Mapper、启动类和配置文件，不只凭类名猜测。
+2. 不确定时先搜索现有 Controller、Service、Mapper、启动类和配置文件，不只凭类名猜测。
 3. 修改必须紧贴当前任务。不要顺手做无关重构、全仓库格式化、批量替换历史风格或移动模块目录。
 4. 不要回滚用户已有修改。遇到无关未跟踪或已修改文件，保持原样。
 5. 代码改动必须做受影响模块构建或说明无法构建的原因；文档改动做结构和空白检查。
@@ -33,12 +33,13 @@ Account Center 是内部账号中心服务，提供用户管理、应用（子�
 
 | 包 | 职责 |
 | --- | --- |
-| `app` | 领域模型和业务逻辑。包含实体（AccountUser、AccountApplication）、命令对象（SaveUserCommand、RegisterApplicationCommand）、Store 接口及实现、AccountDirectoryService。 |
+| `app` | 用户与应用业务域，域内分层：`command`（入参命令/查询）、`model`（实体与值对象）、`exception`（领域异常，含国际化消息键）、`service`（应用服务，直接使用 Mapper）、`http`（下游 Provider 适配）、`directory`（目录导入）。 |
+| `common` | 跨域通用模型，目前只有分页结果 `PageResult`。 |
 | `mapper` | MyBatis Mapper 接口。只定义数据访问方法，不包含业务逻辑。 |
 | `web` | Controller 层。包括 REST API（AccountDirectoryController、SsoTicketController）、管理后台页面（HomeController）、全局异常处理（AccountExceptionHandler）。 |
 | `sso` | SSO 单点登录能力。SsoTicketService 负责签发和兑换 ticket，AccountUserSnapshot 和 SsoUserPayload 定义 SSO 数据传输结构。 |
 | `security` | 安全能力。HmacSignatureService 负责 HMAC 签名验证。 |
-| `config` | Spring 配置。AccountCenterConfiguration 管理 Bean 组装、Store 实现切换和 SSO 参数。 |
+| `config` | Spring 配置。AccountCenterConfiguration 装配无状态组件、登录和票据服务。 |
 
 ## 业务边界
 
@@ -51,28 +52,31 @@ Account Center 是内部账号中心服务，提供用户管理、应用（子�
 
 ## 分层架构
 
-本项目采用 Store 模式而非传统 Service + Repository 分层：
+按业务域分包，域内再分 Controller / Service / Mapper 三层；业务规则在 Service，SQL 在 Mapper XML，不再保留 Store / Repository 中间层：
 
 ```
-Controller -> AccountDirectoryService -> AccountStore (接口)
-                                          |-- MyBatisAccountStore (生产)
-                                          |-- InMemoryAccountStore (测试/演示)
+Controller -> UserManagementService / ApplicationManagementService / UserApplicationAccessService
+                    |-- AccountUserMapper
+                    |-- AccountApplicationMapper
+                    |-- AccountUserApplicationMapper / SyncCommandMapper
+                    |-- ApplicationSyncMapper / DirectoryImportMapper / UserImportMapper
+                                    |
+                              Mapper XML (resources/mapper/*.xml)
 ```
 
-- **Store 接口** (`AccountStore`): 定义数据访问契约，封装所有持久化操作。
-- **Store 实现**: `MyBatisAccountStore` 通过 Mapper 操作数据库，`InMemoryAccountStore` 用于测试和演示。通过 `account.store.type` 配置切换。
-- **AccountDirectoryService**: 编排业务逻辑，调用 Store 和 ApplicationUserSyncClient。
-- **Mapper**: 薄层 MyBatis 接口，XML 定义 SQL。Mapper 只被 Store 实现调用，Controller 和 Service 不直接调用 Mapper。
+- **Service**：`app.service` 下的应用服务编排业务规则、构建实体、判断乐观锁并抛出带消息键的业务异常；按需注入对应 Mapper，不新增 Store / Repository 中间层。
+- **Mapper**：薄层 MyBatis 接口，XML 定义 SQL，只做数据访问，不承载业务判断。
+- **持久化验证**：测试连接 H2，通过 Flyway 建表并执行真实 SQL，不提供内存或模拟实现。
 
 ## Java 代码硬规则
 
-生成或修改 Controller、Service、Store、Mapper、Entity、DTO、Command 等 Java 代码时，必须参考 `.agents/skills/account-code-rules/SKILL.md`。
+生成或修改 Controller、Service、Mapper、Entity、DTO、Command 等 Java 代码时，必须参考 `.agents/skills/account-code-rules/SKILL.md`。
 
 高频底线：
 - 依赖注入使用构造器注入（项目统一风格），不使用 `@Autowired` 或 `@Resource` 注解。
 - Java 新增/修改代码使用 Lombok 消除 DTO、Command、值对象和构造器样板；敏感对象不得无差别使用 `@Data` 或生成包含密码、Secret、Token、Session 的 `toString`。
 - API 默认通过 Git、制品和发布版本迭代；普通 URL、OpenAPI 文件名、配置键、Java 包、业务类、DTO、异常和测试类名不带 `v1` / `V1`。确需并行兼容时必须单独设计迁移窗口。
-- Controller 不直接调用 Mapper；业务逻辑写在 Service/Store 层。
+- Controller 不直接调用 Mapper；业务逻辑写在 Service，Mapper 只做数据访问。
 - 返回 `List` 时使用空集合，不返回 `null`。
 - 领域实体（AccountUser、AccountApplication）是纯 POJO，不使用 ORM 注解。
 - Mapper 接口使用 `@Mapper` 注解，SQL 定义在对应 XML 文件中。
@@ -85,7 +89,7 @@ Controller -> AccountDirectoryService -> AccountStore (接口)
 
 | Skill | 必须使用场景 |
 | --- | --- |
-| `.agents/skills/account-code-rules` | 生成或修改 Java 代码，包括 Entity、Command、DTO、Service、Store、Controller、Mapper。 |
+| `.agents/skills/account-code-rules` | 生成或修改 Java 代码，包括 Entity、Command、DTO、Service、Controller、Mapper。 |
 | `.agents/skills/account-database-rules` | 新增或修改表、字段、索引、Mapper XML SQL、Flyway 迁移脚本。 |
 | `.agents/skills/account-query-performance` | 优化慢查询、N+1、循环查库、批量查询或集合映射。 |
 

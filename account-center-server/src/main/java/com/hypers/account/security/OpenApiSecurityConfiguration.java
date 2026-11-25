@@ -1,6 +1,6 @@
 package com.hypers.account.security;
 
-import com.hypers.account.app.AccountDirectoryService;
+import com.hypers.account.app.service.ApplicationManagementService;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,10 +15,10 @@ public class OpenApiSecurityConfiguration {
 
     @Bean
     public OpenApiSignatureVerifier openApiSignatureVerifier(
-            AccountDirectoryService directoryService,
+            ApplicationManagementService applicationService,
             HmacSignatureService signatureService,
             InMemoryNonceStore nonceStore,
             Clock clock) {
-        return new OpenApiSignatureVerifier(directoryService, signatureService, nonceStore, clock);
+        return new OpenApiSignatureVerifier(applicationService, signatureService, nonceStore, clock);
     }
 }

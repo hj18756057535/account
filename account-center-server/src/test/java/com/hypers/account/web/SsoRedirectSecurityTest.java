@@ -3,11 +3,13 @@ package com.hypers.account.web;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.RegisterApplicationCommand;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.command.RegisterApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,11 +27,17 @@ class SsoRedirectSecurityTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private AccountDirectoryService directoryService;
+    private UserManagementService userService;
+
+    @Autowired
+    private ApplicationManagementService applicationService;
+
+    @Autowired
+    private UserApplicationAccessService accessService;
 
     @Test
     void ssoAuthorizeRejectsUnregisteredRedirectUri() throws Exception {
-        AccountApplication application = directoryService.registerApplication(new RegisterApplicationCommand(
+        AccountApplication application = applicationService.registerApplication(new RegisterApplicationCommand(
                 "redirect-safe",
                 "回调校验应用",
                 "http://localhost:9003",
@@ -37,12 +45,12 @@ class SsoRedirectSecurityTest {
                 "http://localhost:9003/permissions",
                 "", "secret",
                 "default"));
-        AccountUser user = directoryService.createUser(new SaveUserCommand(
+        AccountUser user = userService.createUser(new SaveUserCommand(
                 "redirect-safe-user",
                 "redirect-safe@example.com",
                 "回调校验用户",
                 "13800000000"));
-        directoryService.authorize(user.getId(), application.getAppCode());
+        accessService.authorize(user.getId(), application.getAppCode());
 
         mockMvc.perform(get("/sso/authorize")
                         .sessionAttr(AuthController.SESSION_USER_KEY, new AccountSessionUser(user.getId(), user.getAccount(), user.getName()))

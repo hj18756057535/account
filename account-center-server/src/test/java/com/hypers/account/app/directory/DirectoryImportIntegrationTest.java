@@ -5,16 +5,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.SaveApplicationCommand;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.command.SaveApplicationCommand;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserManagementService;
+
 import com.hypers.account.auth.AdminAuthorizationService;
 import com.hypers.account.contract.directory.AccountDirectoryOrganization;
+import com.hypers.account.mapper.DirectoryImportMapper;
 import com.hypers.account.contract.directory.AccountDirectoryRole;
 import com.hypers.account.contract.directory.AccountDirectoryUser;
-import com.hypers.account.web.management.ApiException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,9 +33,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
         "account.oidc.enabled=false", "account.application-sync.enabled=false"
 })
 class DirectoryImportIntegrationTest {
-    @Autowired private AccountStore accounts;
+    @Autowired private UserManagementService userService;
+    
+    @Autowired private ApplicationManagementService applicationService;
     @Autowired private DirectoryImportService service;
-    @Autowired private DirectoryImportStore imports;
+    @Autowired private DirectoryImportMapper imports;
     @Autowired private AdminAuthorizationService authorization;
     @Autowired private JdbcTemplate jdbc;
     @MockitoBean private ApplicationDirectoryClient client;
@@ -45,12 +50,12 @@ class DirectoryImportIntegrationTest {
     @BeforeEach
     void setup() {
         String suffix = UUID.randomUUID().toString().replace("-", "");
-        operator = accounts.saveNewUser(new SaveUserCommand("operator-" + suffix, "", "Operator", ""));
-        existing = accounts.saveNewUser(new SaveUserCommand("existing-" + suffix, "", "Original", ""));
-        accounts.setUserPassword(existing.getId(), "synthetic-existing-password-hash");
-        accounts.updateUserStatus(existing.getId(), "disabled");
+        operator = userService.createManagedUser(new SaveUserCommand("operator-" + suffix, "", "Operator", ""), null);
+        existing = userService.createManagedUser(new SaveUserCommand("existing-" + suffix, "", "Original", ""), null);
+        userService.updatePassword(existing.getId(), "synthetic-existing-password-hash");
+        userService.changeManagedUserStatus(existing.getId(), "disabled", userService.getUser(existing.getId()).getVersion(), null);
         freshAccount = "fresh-" + suffix;
-        application = accounts.createManagedApplication(new SaveApplicationCommand("directory-" + suffix, "CMS",
+        application = applicationService.createManagedApplication(new SaveApplicationCommand("directory-" + suffix, "CMS",
                 "http://localhost:8850", "http://localhost:8850/callback", "", "http://localhost:9101", "default", "synthetic-app-secret", 0), operator.getId());
         snapshot = new ApplicationDirectorySnapshot();
         snapshot.setAppCode(application.getAppCode());
@@ -76,16 +81,16 @@ class DirectoryImportIntegrationTest {
         DirectoryImportPreview preview = service.preview(application.getAppCode(), operator.getId());
         assertThat(preview.getNewUsers()).isEqualTo(1);
         assertThat(preview.getExistingUsers()).isEqualTo(1);
-        assertThat(accounts.findUserByAccount(freshAccount)).isNull();
+        assertThat(userService.findByAccount(freshAccount)).isNull();
 
         DirectoryImportResult result = service.commit(application.getAppCode(), preview.getImportId(), operator.getId());
         assertThat(result.getCreatedUsers()).isEqualTo(1);
         assertThat(result.getReusedUsers()).isEqualTo(1);
-        AccountUser retained = accounts.requireUser(existing.getId());
+        AccountUser retained = userService.getUser(existing.getId());
         assertThat(retained.getName()).isEqualTo("Original");
         assertThat(retained.getPassword()).isEqualTo("synthetic-existing-password-hash");
         assertThat(retained.getStatus()).isEqualTo("disabled");
-        AccountUser created = accounts.findUserByAccount(freshAccount);
+        AccountUser created = userService.findByAccount(freshAccount);
         assertThat(created.getId()).isNotEqualTo("9007199254740994");
         assertThat(created.getStatus()).isEqualTo("disabled");
         assertThat(created.getPassword()).isNull();
@@ -99,11 +104,11 @@ class DirectoryImportIntegrationTest {
     @Test
     void secretRotationInvalidatesThePreviewBeforeAnyUsersAreWritten() {
         DirectoryImportPreview preview = service.preview(application.getAppCode(), operator.getId());
-        accounts.rotateManagedApplicationSecret(application.getAppCode(), "synthetic-rotated-secret", 2,
+        applicationService.rotateManagedApplicationSecret(application.getAppCode(), "synthetic-rotated-secret",
                 application.getVersion(), operator.getId());
         assertThatThrownBy(() -> service.commit(application.getAppCode(), preview.getImportId(), operator.getId()))
-                .isInstanceOf(ApiException.class);
-        assertThat(accounts.findUserByAccount(freshAccount)).isNull();
+                .isInstanceOf(BusinessException.class);
+        assertThat(userService.findByAccount(freshAccount)).isNull();
         assertThat(imports.links(application.getAppCode())).isEmpty();
         assertThat(jdbc.queryForObject("SELECT status FROM account_directory_imports WHERE id = ?",
                 String.class, preview.getImportId())).isEqualTo("preview");
@@ -119,7 +124,7 @@ class DirectoryImportIntegrationTest {
         service.commit(application.getAppCode(), second.getImportId(), operator.getId());
         assertThat(imports.link(existing.getId(), application.getAppCode()).getLocalUserId()).isEqualTo("9007199254740993");
         snapshot.getUsers().get(0).setAccount(freshAccount);
-        assertThatThrownBy(() -> service.preview(application.getAppCode(), operator.getId())).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> service.preview(application.getAppCode(), operator.getId())).isInstanceOf(BusinessException.class);
     }
 
     private static AccountDirectoryUser user(String id, String account, String status) {

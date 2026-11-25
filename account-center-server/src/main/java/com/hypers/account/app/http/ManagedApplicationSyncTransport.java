@@ -1,15 +1,25 @@
 package com.hypers.account.app.http;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.ApplicationSyncDelivery;
-import com.hypers.account.app.ApplicationSyncFailure;
-import com.hypers.account.app.ApplicationSyncPolicy;
-import com.hypers.account.app.ApplicationSyncTransport;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.model.ApplicationSyncDelivery;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.model.ApplicationSyncFailure;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.service.ApplicationSyncTransport;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.AccountIntegrationHeaders;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.AccountProviderProtocol;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.AccountIntegrationPaths;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.contract.application.AccountUserSyncResult;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.security.HmacSignatureService;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -63,21 +73,21 @@ public class ManagedApplicationSyncTransport implements ApplicationSyncTransport
             var response = future.get(5, TimeUnit.SECONDS);
             int status = response.statusCode();
             if (status != 200) throw new ApplicationSyncFailure(
-                    status == 429 || status >= 500 ? "SYNC_DEPENDENCY_UNAVAILABLE" : "SYNC_RESPONSE_REJECTED",
+                    status == 429 || status >= 500 ? ErrorCode.SYNC_DEPENDENCY_UNAVAILABLE : ErrorCode.SYNC_RESPONSE_REJECTED,
                     status == 429 || status >= 500);
             AccountUserSyncResult result;
             try {
                 var body = json.readTree(response.body());
                 var version = body == null ? null : body.get("appliedVersion");
                 if (version == null || !version.isIntegralNumber() || !version.canConvertToLong())
-                    throw new ApplicationSyncFailure("SYNC_RESULT_INVALID", false);
+                    throw new ApplicationSyncFailure(ErrorCode.SYNC_RESULT_INVALID, false);
                 for (String field : List.of("appCode", "globalUserId", "localUserId", "appliedStatus", "resultCode")) {
                     if (body.get(field) == null || !body.get(field).isTextual())
-                        throw new ApplicationSyncFailure("SYNC_RESULT_INVALID", false);
+                        throw new ApplicationSyncFailure(ErrorCode.SYNC_RESULT_INVALID, false);
                 }
                 result = json.treeToValue(body, AccountUserSyncResult.class);
             }
-            catch (Exception error) { throw new ApplicationSyncFailure("SYNC_RESULT_INVALID", false); }
+            catch (Exception error) { throw new ApplicationSyncFailure(ErrorCode.SYNC_RESULT_INVALID, false); }
             if (result == null || !delivery.getAppCode().equals(result.getAppCode())
                     || !delivery.getUserId().equals(result.getGlobalUserId())
                     || !delivery.getDesiredStatus().equals(result.getAppliedStatus())
@@ -85,21 +95,21 @@ public class ManagedApplicationSyncTransport implements ApplicationSyncTransport
                     || result.getLocalUserId() == null || result.getLocalUserId().isBlank()
                     || result.getLocalUserId().length() > 255
                     || !("APPLIED".equals(result.getResultCode()) || "ALREADY_APPLIED".equals(result.getResultCode()))) {
-                throw new ApplicationSyncFailure("SYNC_RESULT_INVALID", false);
+                throw new ApplicationSyncFailure(ErrorCode.SYNC_RESULT_INVALID, false);
             }
             return result;
         } catch (ApplicationSyncFailure error) {
             throw error;
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            throw new ApplicationSyncFailure("SYNC_DEPENDENCY_UNAVAILABLE", true);
+            throw new ApplicationSyncFailure(ErrorCode.SYNC_DEPENDENCY_UNAVAILABLE, true);
         } catch (Exception error) {
             Throwable cause = error;
             while (cause != null) {
                 if (cause instanceof ApplicationSyncFailure failure) throw failure;
                 cause = cause.getCause();
             }
-            throw new ApplicationSyncFailure("SYNC_DEPENDENCY_UNAVAILABLE", true);
+            throw new ApplicationSyncFailure(ErrorCode.SYNC_DEPENDENCY_UNAVAILABLE, true);
         } finally {
             if (!future.isDone()) future.cancel(true);
         }
@@ -118,7 +128,7 @@ public class ManagedApplicationSyncTransport implements ApplicationSyncTransport
                 if (buffer.remaining() > MAX_RESPONSE - received) {
                     terminated = true;
                     subscription.cancel();
-                    delegate.onError(new ApplicationSyncFailure("SYNC_RESPONSE_TOO_LARGE", false));
+                    delegate.onError(new ApplicationSyncFailure(ErrorCode.SYNC_RESPONSE_TOO_LARGE, false));
                     return;
                 }
                 received += buffer.remaining();

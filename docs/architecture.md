@@ -45,18 +45,17 @@ account-center/                          # 父 POM (packaging: pom)
 │  AuthController │ AdminTicketController │ AuditLogController │
 ├─────────────────────────────────────────────────────────────┤
 │                    Service 层                                 │
-│  AccountDirectoryService │ SsoTicketService                  │
+│  UserManagementService │ ApplicationManagementService         │
+│  UserApplicationAccessService │ SsoTicketService              │
 │  AccountLoginService │ AdminTicketService │ AuditLogService  │
 ├─────────────────────────────────────────────────────────────┤
-│                    Store 层 (数据访问抽象)                      │
-│  AccountStore (接口)                                          │
-│  ├── MyBatisAccountStore (生产)                               │
-│  └── InMemoryAccountStore (测试)                              │
-├─────────────────────────────────────────────────────────────┤
-│                    Mapper 层 (MyBatis)                        │
+│                    Mapper 层 (MyBatis，持久化边界)              │
 │  AccountUserMapper │ AccountApplicationMapper                │
-│  AccountUserApplicationMapper │ AdminTicketMapper            │
+│  AccountUserApplicationMapper │ SyncCommandMapper            │
+│  ApplicationSyncMapper │ DirectoryImportMapper               │
+│  UserImportMapper │ AdminTicketMapper                        │
 │  AuditLogMapper │ AdminRoleMapper                            │
+│  └── SQL 位于 resources/mapper/*.xml                          │
 ├─────────────────────────────────────────────────────────────┤
 │                    数据库                                      │
 │  PostgreSQL / MySQL / H2                                      │
@@ -66,9 +65,9 @@ account-center/                          # 父 POM (packaging: pom)
 ### 层间调用规则
 
 - **Controller** 只做参数校验和请求路由，不包含业务逻辑，**不直接调用 Mapper**
-- **Service** 编排业务逻辑，调用 Store 和同步客户端
-- **Store** 封装持久化细节，Service 只依赖 Store 接口
-- **Mapper** 薄层 MyBatis 接口，只被 Store 实现类调用
+- **Service** 编排业务规则、构建实体、判断乐观锁并抛出带消息键的业务异常，按需注入 Mapper
+- **Mapper** 薄层 MyBatis 接口，只做数据访问，不承载业务判断
+- 不保留 Store / Repository 中间层；测试连 H2 执行真实 SQL
 
 ## 5. 核心流程
 
@@ -223,7 +222,6 @@ account_users (1) ──── (N) account_user_applications (N) ──── (1
 | 配置键 | 默认值 | 说明 |
 |---|---|---|
 | `server.port` | 8088 | 服务端口 |
-| `account.store.type` | mybatis | 存储实现：mybatis / memory |
 | `account.sync.type` | http | 同步方式：http / noop |
 | `spring.flyway.enabled` | true | 自动迁移 |
 | `mybatis.mapper-locations` | classpath:mapper/*.xml | Mapper XML 位置 |
@@ -239,11 +237,11 @@ account_users (1) ──── (N) account_user_applications (N) ──── (1
 
 ## 9. 异常处理
 
-| 异常类型 | HTTP 状态 | 触发场景 |
-|---|---|---|
-| `IllegalArgumentException` | 400 | 业务校验失败（用户/应用不存在、已禁用等） |
-| `SsoTicketException` | 400 | SSO ticket 错误（未找到、已使用、过期） |
-| `ApplicationSyncException` | 502 | 应用同步失败（应用返回非 2xx 或网络异常） |
+| 类型 | 说明 |
+|---|---|
+| `ErrorCode` | 枚举定义 HTTP 状态、对外错误码和 i18n 消息键，是异常契约的唯一来源 |
+| `BusinessException` | 业务错误的唯一异常类型，可携带字段级消息键 |
+| `ApplicationSyncFailure` | 同步重试控制流（内部使用），对外统一由 `BusinessException` 返回 |
 
 统一响应格式：
 

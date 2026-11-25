@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.ApplicationSyncDelivery;
-import com.hypers.account.app.ApplicationSyncFailure;
-import com.hypers.account.app.ApplicationSyncPolicy;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.ApplicationSyncDelivery;
+import com.hypers.account.app.model.ApplicationSyncFailure;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
 import com.hypers.account.config.ApplicationSyncProperties;
 import com.hypers.account.contract.AccountIntegrationHeaders;
 import com.hypers.account.security.HmacSignatureService;
@@ -26,12 +26,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.mock.env.MockEnvironment;
+
 
 class ManagedApplicationSyncTransportTest {
     private HttpServer server;
     private ApplicationSyncProperties properties;
-    private MockEnvironment environment;
+
     private ApplicationSyncPolicy policy;
     private ManagedApplicationSyncTransport transport;
     private AccountApplication app;
@@ -74,9 +74,7 @@ class ManagedApplicationSyncTransportTest {
         properties = new ApplicationSyncProperties();
         properties.setEnabled(true);
 
-        environment = new MockEnvironment();
-        environment.setActiveProfiles("test");
-        policy = new ApplicationSyncPolicy(properties, environment);
+        policy = new ApplicationSyncPolicy(properties);
         transport = new ManagedApplicationSyncTransport(policy, json, signatures, Clock.systemUTC());
         app = new AccountApplication("app-1", "Synthetic", base, base + "/callback", base + "/permissions",
                 base, "synthetic-secret", "default");
@@ -140,10 +138,7 @@ class ManagedApplicationSyncTransportTest {
     }
 
     @Test
-    void usesRegisteredTargetAndAllowsLiteralLoopbackWithoutATestProfile() {
-        environment.setActiveProfiles("production");
-        assertThat(policy.canDeliver(app)).isTrue();
-        environment.setActiveProfiles("test");
+    void usesRegisteredTargetAndAllowsLiteralLoopback() {
         assertThat(policy.canDeliver(app)).isTrue();
         properties.setEnabled(false);
         assertThat(policy.canDeliver(app)).isFalse();

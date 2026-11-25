@@ -1,5 +1,17 @@
 package com.hypers.account.app;
 
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.model.ApplicationAccess;
+import com.hypers.account.app.model.ApplicationMenuPermissionFailure;
+import com.hypers.account.app.model.ApplicationUserState;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.ApplicationMenuPermissionClient;
+import com.hypers.account.app.service.ApplicationMenuPermissionService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
+import com.hypers.account.mapper.ApplicationSyncMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,7 +26,6 @@ import com.hypers.account.audit.AuditLogService;
 import com.hypers.account.contract.application.MenuPermissionNode;
 import com.hypers.account.contract.application.MenuPermissionReplaceCommand;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;
-import com.hypers.account.web.management.ApiException;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,27 +34,30 @@ import org.mockito.ArgumentCaptor;
 
 class ApplicationMenuPermissionServiceTest {
 
-    private final AccountDirectoryService directory = mock(AccountDirectoryService.class);
-    private final ApplicationSyncStore syncStore = mock(ApplicationSyncStore.class);
+    private final UserManagementService userService = mock(UserManagementService.class);
+    private final ApplicationManagementService applicationService = mock(ApplicationManagementService.class);
+    private final UserApplicationAccessService accessService = mock(UserApplicationAccessService.class);
+    private final ApplicationSyncMapper syncMapper = mock(ApplicationSyncMapper.class);
     private final ApplicationMenuPermissionClient client = mock(ApplicationMenuPermissionClient.class);
     private final AuditLogService audit = mock(AuditLogService.class);
     private final ApplicationMenuPermissionService service = new ApplicationMenuPermissionService(
-            directory, syncStore, client, audit, new ObjectMapper().findAndRegisterModules());
+            userService, applicationService, accessService, syncMapper, client, audit,
+            new ObjectMapper().findAndRegisterModules());
 
     @BeforeEach
     void setUp() {
-        when(directory.getUser("admin")).thenReturn(user("admin", "administrator"));
-        when(directory.getUser("user-1")).thenReturn(user("user-1", "alice"));
+        when(userService.getUser("admin")).thenReturn(user("admin", "administrator"));
+        when(userService.getUser("user-1")).thenReturn(user("user-1", "alice"));
         AccountApplication application = new AccountApplication("app-1", "Application",
                 "https://app.example", "https://app.example/callback", "https://app.example/permissions",
                 "https://app.example", "secret", "default");
 
-        when(directory.getApplication("app-1")).thenReturn(application);
-        when(directory.getUserApplicationAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
+        when(applicationService.getApplication("app-1")).thenReturn(application);
+        when(accessService.getUserApplicationAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
                 "user-1", "app-1", "enabled", 7, "succeeded", "command-1", null,
                 "enabled", 7L, null, null, false));
-        when(syncStore.lockApplication("app-1")).thenReturn(Boolean.TRUE);
-        when(syncStore.lockAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
+        when(syncMapper.lockApplication("app-1")).thenReturn(Boolean.TRUE);
+        when(syncMapper.lockAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
                 "user-1", "app-1", "enabled", 7, null, null, null));
         ApplicationUserState state = new ApplicationUserState();
         state.setUserId("user-1");
@@ -51,7 +65,7 @@ class ApplicationMenuPermissionServiceTest {
         state.setLocalUserId("local-1");
         state.setAppliedStatus("enabled");
         state.setAppliedVersion(7);
-        when(syncStore.state("user-1", "app-1")).thenReturn(state);
+        when(syncMapper.state("user-1", "app-1")).thenReturn(state);
     }
 
     @Test
@@ -75,12 +89,12 @@ class ApplicationMenuPermissionServiceTest {
 
     @Test
     void blocksProviderCallUntilUserSyncIsConfirmed() {
-        when(directory.getUserApplicationAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
+        when(accessService.getUserApplicationAccess("user-1", "app-1")).thenReturn(new ApplicationAccess(
                 "user-1", "app-1", "enabled", 7, "succeeded", "command-1", null,
                 "enabled", 6L, null, null, false));
 
         assertThatThrownBy(() -> service.query("user-1", "app-1", "zh-CN", "admin"))
-                .isInstanceOf(ApiException.class)
+                .isInstanceOf(BusinessException.class)
                 .extracting("code").isEqualTo("MENU_PERMISSION_PREREQUISITE_NOT_MET");
         verify(client, never()).query(any(), any());
     }
@@ -92,10 +106,10 @@ class ApplicationMenuPermissionServiceTest {
 
         assertThatThrownBy(() -> service.replace("user-1", "app-1", 7, "catalog-1", "permission-1",
                 List.of(), "en-US", "idem-1", "admin"))
-                .isInstanceOf(ApiException.class)
+                .isInstanceOf(BusinessException.class)
                 .satisfies(error -> {
-                    ApiException api = (ApiException) error;
-                    assertThat(api.getStatus().value()).isEqualTo(409);
+                    BusinessException api = (BusinessException) error;
+                    assertThat(api.getStatus()).isEqualTo(409);
                     assertThat(api.getCode()).isEqualTo("PERMISSION_REVISION_CONFLICT");
                     assertThat(api.getMessage()).isEqualTo("menuPermission.revisionConflict");
                 });

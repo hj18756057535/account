@@ -1,8 +1,8 @@
 package com.hypers.account.mapper;
 
-import com.hypers.account.app.ApplicationAccess;
-import com.hypers.account.app.ApplicationSyncDelivery;
-import com.hypers.account.app.ApplicationUserState;
+import com.hypers.account.app.model.ApplicationAccess;
+import com.hypers.account.app.model.ApplicationSyncDelivery;
+import com.hypers.account.app.model.ApplicationUserState;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;

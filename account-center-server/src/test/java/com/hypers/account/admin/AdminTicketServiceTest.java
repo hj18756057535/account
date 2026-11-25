@@ -1,5 +1,6 @@
 package com.hypers.account.admin;
 
+import com.hypers.account.app.exception.BusinessException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -37,7 +38,7 @@ class AdminTicketServiceTest {
         ticketService.verify("cms-ai", code);
 
         assertThatThrownBy(() -> ticketService.verify("cms-ai", code))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -45,13 +46,13 @@ class AdminTicketServiceTest {
         String code = ticketService.issue("cms-ai", "user-1", "iframe-permission");
 
         assertThatThrownBy(() -> ticketService.verify("other-app", code))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
     void verifyRejectsExpiredTicket() {
         String code = ticketService.issue("cms-ai", "user-1", "iframe-permission");
         jdbc.update("update account_admin_tickets set expires_at = '2000-01-01 00:00:00' where code = ?", code);
-        assertThatThrownBy(() -> ticketService.verify("cms-ai", code)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> ticketService.verify("cms-ai", code)).isInstanceOf(BusinessException.class);
     }
 }

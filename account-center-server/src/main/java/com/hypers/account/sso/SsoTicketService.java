@@ -1,5 +1,7 @@
 package com.hypers.account.sso;
 
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,19 +31,19 @@ public class SsoTicketService {
     public SsoUserPayload exchange(String appCode, String code) {
         Ticket ticket = tickets.get(code);
         if (ticket == null) {
-            throw new SsoTicketException("ticket not found");
+            throw new BusinessException(ErrorCode.TICKET_INVALID);
         }
         if (ticket.used.get()) {
-            throw new SsoTicketException("ticket already used");
+            throw new BusinessException(ErrorCode.TICKET_INVALID);
         }
         if (!ticket.appCode.equals(appCode)) {
-            throw new SsoTicketException("ticket application mismatch");
+            throw new BusinessException(ErrorCode.TICKET_INVALID);
         }
         if (!ticket.expiresAt.isAfter(clock.instant())) {
-            throw new SsoTicketException("ticket expired");
+            throw new BusinessException(ErrorCode.TICKET_INVALID);
         }
         if (!ticket.used.compareAndSet(false, true)) {
-            throw new SsoTicketException("ticket already used");
+            throw new BusinessException(ErrorCode.TICKET_INVALID);
         }
         AccountUserSnapshot user = ticket.user;
         return new SsoUserPayload(

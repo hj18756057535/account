@@ -1,6 +1,6 @@
 package com.hypers.account.mapper;
 
-import com.hypers.account.app.UserImportBatch;
+import com.hypers.account.app.model.UserImportBatch;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;

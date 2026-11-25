@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hypers.account.mapper.ApplicationSyncMapper">
-    <resultMap id="delivery" type="com.hypers.account.app.ApplicationSyncDelivery">
+    <resultMap id="delivery" type="com.hypers.account.app.model.ApplicationSyncDelivery">
         <result property="id" column="id"/>
         <result property="idempotencyKey" column="idempotency_key"/>
         <result property="userId" column="user_id"/>
@@ -22,7 +22,7 @@
         <result property="leaseToken" column="lease_token"/>
         <result property="leaseExpiresAt" column="lease_expires_at"/>
     </resultMap>
-    <resultMap id="state" type="com.hypers.account.app.ApplicationUserState">
+    <resultMap id="state" type="com.hypers.account.app.model.ApplicationUserState">
         <result property="userId" column="user_id"/>
         <result property="appCode" column="app_code"/>
         <result property="localUserId" column="local_user_id"/>
@@ -34,7 +34,7 @@
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
-    <resultMap id="access" type="com.hypers.account.app.ApplicationAccess">
+    <resultMap id="access" type="com.hypers.account.app.model.ApplicationAccess">
         <result property="userId" column="user_id"/>
         <result property="appCode" column="app_code"/>
         <result property="desiredStatus" column="desired_status"/>

@@ -115,7 +115,7 @@ CREATE INDEX idx_operation_logs_created ON account_operation_logs (created_at);
 - Mapper XML 使用 `SELECT *`。
 - 参数使用 `${}` 拼接（SQL 注入风险）。
 - 在 SQL、文档或示例中写真实密钥、token、数据库密码。
-- `InMemoryAccountStore` 和 `MyBatisAccountStore` 行为不同步。
+- 为绕过真实 SQL，新增 Store / Repository 中间层或内存实现替代 Mapper 查询。
 
 ## 验证
 

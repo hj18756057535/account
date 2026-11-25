@@ -1,6 +1,9 @@
 package com.hypers.account.oidc;
 
-import com.hypers.account.app.AccountStore;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.mapper.OidcAuthorizationMapper;
@@ -61,7 +64,8 @@ import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 @EnableConfigurationProperties(OidcProperties.class)
 public class OidcConfiguration {
     @Bean
-    public OidcClientRepository oidcClients(AccountStore store, OidcProperties properties) {
+    public OidcClientRepository oidcClients(ApplicationManagementService applicationService,
+                                           OidcProperties properties) {
         OidcUrlPolicy.validateIssuer(properties.getIssuer(), properties.isAllowIntranetHttp());
         if (properties.getCodeTtl().compareTo(Duration.ofSeconds(30)) < 0
                 || properties.getCodeTtl().compareTo(Duration.ofSeconds(120)) > 0
@@ -73,24 +77,21 @@ public class OidcConfiguration {
             client.getPostLogoutRedirectUris().forEach(uri ->
                     OidcUrlPolicy.validateWebUri(uri, properties.isAllowIntranetHttp()));
         });
-        return new OidcClientRepository(store, properties);
+        return new OidcClientRepository(applicationService, properties);
     }
 
     @Bean
-    public OidcAuthorizationStore oidcAuthorizationStore(OidcAuthorizationMapper mapper) {
-        return new MyBatisOidcAuthorizationStore(mapper);
-    }
-
-    @Bean
-    public OAuth2AuthorizationService oidcAuthorizations(OidcAuthorizationStore store,
+    public OAuth2AuthorizationService oidcAuthorizations(OidcAuthorizationMapper authorizationMapper,
                                                          RegisteredClientRepository clients,
                                                          OidcAccessPolicy policy, Clock clock) {
-        return new PersistentOidcAuthorizationService(store, clients, policy, clock);
+        return new PersistentOidcAuthorizationService(authorizationMapper, clients, policy, clock);
     }
 
     @Bean
-    public OidcAccessPolicy oidcAccessPolicy(AccountStore store) {
-        return new OidcAccessPolicy(store);
+    public OidcAccessPolicy oidcAccessPolicy(UserManagementService userService,
+                                             ApplicationManagementService applicationService,
+                                             UserApplicationAccessService accessService) {
+        return new OidcAccessPolicy(userService, applicationService, accessService);
     }
 
     @Bean
@@ -144,12 +145,13 @@ public class OidcConfiguration {
     }
 
     @Bean
-    public OAuth2TokenCustomizer<JwtEncodingContext> oidcClaims(AccountStore store, OidcProperties properties) {
+    public OAuth2TokenCustomizer<JwtEncodingContext> oidcClaims(UserManagementService userService,
+                                                                OidcProperties properties) {
         return context -> {
             context.getJwsHeader().keyId(properties.getSigningKeyAlias());
             if ("id_token".equals(context.getTokenType().getValue())
                     && context.getAuthorizedScopes().contains("profile")) {
-                var user = store.requireUser(context.getPrincipal().getName());
+                var user = userService.getUser(context.getPrincipal().getName());
                 context.getClaims().claim("name", user.getName()).claim("preferred_username", user.getAccount());
             }
         };
@@ -164,7 +166,7 @@ public class OidcConfiguration {
                     var identity = login.authenticate(authentication.getName(), String.valueOf(authentication.getCredentials()));
                     var user = User.withUsername(identity.getUserId()).password("").authorities("ACCOUNT_USER").build();
                     return UsernamePasswordAuthenticationToken.authenticated(user, null, user.getAuthorities());
-                } catch (IllegalArgumentException exception) {
+                } catch (BusinessException exception) {
                     throw new BadCredentialsException("Invalid credentials");
                 }
             }
@@ -178,7 +180,7 @@ public class OidcConfiguration {
 
     @Bean
     @Order(1)
-    public SecurityFilterChain oidcProtocolSecurity(HttpSecurity http, AccountStore store,
+    public SecurityFilterChain oidcProtocolSecurity(HttpSecurity http, UserManagementService userService,
                                                     OidcAccessPolicy policy, OAuth2AuthorizationService authorizations)
             throws Exception {
         var server = OAuth2AuthorizationServerConfigurer.authorizationServer();
@@ -243,7 +245,7 @@ public class OidcConfiguration {
                                 .userInfoEndpoint(endpoint -> endpoint.userInfoMapper(context -> {
                                     var authorization = context.getAuthorization();
                                     policy.require(authorization.getPrincipalName(), authorization.getRegisteredClientId(), "invalid_token");
-                                    var user = store.requireUser(authorization.getPrincipalName());
+                                    var user = userService.getUser(authorization.getPrincipalName());
                                     if (authorization.getAuthorizedScopes().contains("profile")) {
                                         return new OidcUserInfo(Map.of("sub", user.getId(), "name", user.getName(),
                                                 "preferred_username", user.getAccount()));
@@ -259,7 +261,7 @@ public class OidcConfiguration {
                     }
                 }))
                 .oauth2ResourceServer(resource -> resource.jwt(Customizer.withDefaults()))
-                .addFilterAfter(new OidcSessionFilter(store), SecurityContextHolderFilter.class);
+                .addFilterAfter(new OidcSessionFilter(userService), SecurityContextHolderFilter.class);
         var cache = new HttpSessionRequestCache();
         cache.setRequestMatcher(request -> "/oauth2/authorize".equals(request.getServletPath())
                 || request.getRequestURI().equals(request.getContextPath() + "/oauth2/authorize"));
@@ -269,14 +271,14 @@ public class OidcConfiguration {
 
     @Bean
     @Order(2)
-    public SecurityFilterChain oidcApplicationSecurity(HttpSecurity http, AccountStore store,
+    public SecurityFilterChain oidcApplicationSecurity(HttpSecurity http, UserManagementService userService,
                                                       AuthenticationProvider accountOidcLoginProvider) throws Exception {
         var success = new SavedRequestAwareAuthenticationSuccessHandler();
         http.authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
                 .authenticationProvider(accountOidcLoginProvider)
                 .formLogin(form -> form.loginPage("/login").usernameParameter("account")
                         .successHandler((request, response, authentication) -> {
-                            var user = store.requireUser(authentication.getName());
+                            var user = userService.getUser(authentication.getName());
                             var session = request.getSession();
                             session.setAttribute(AuthController.SESSION_USER_KEY,
                                     new AccountSessionUser(user.getId(), user.getAccount(), user.getName()));
@@ -293,7 +295,7 @@ public class OidcConfiguration {
                                 && (request.getRequestURI().equals(request.getContextPath() + "/login")
                                 || request.getRequestURI().equals(request.getContextPath() + "/logout"))))
                 .logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl("/login"))
-                .addFilterAfter(new OidcSessionFilter(store), SecurityContextHolderFilter.class);
+                .addFilterAfter(new OidcSessionFilter(userService), SecurityContextHolderFilter.class);
         return http.build();
     }
 }

@@ -1,5 +1,4 @@
 package com.hypers.account.web;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,14 +9,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.SaveUserCommand;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.command.SaveUserCommand;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.web.management.CsrfTokenManager;
-import com.hypers.account.web.management.ExcelUserImportCodec;
+import com.hypers.account.web.management.service.ExcelUserImportCodec;
 import com.hypers.account.web.management.UserImportFeature;
-import com.hypers.account.web.management.UserImportService;
+import com.hypers.account.web.management.service.UserImportService;
 import jakarta.servlet.MultipartConfigElement;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -47,7 +47,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class UserImportIntegrationTest {
     private final MockMvc mvc;
     private final ObjectMapper json;
-    private final AccountDirectoryService directory;
+    private final UserManagementService userService;
     private final AdminRoleMapper roles;
     private final JdbcTemplate jdbc;
     private final ExcelUserImportCodec codec;
@@ -61,7 +61,7 @@ class UserImportIntegrationTest {
     @BeforeEach
     void admin() throws Exception {
         String account = "operator-" + UUID.randomUUID();
-        var user = directory.createManagedUser(new SaveUserCommand(account, "operator@example.invalid", "Test", "01"), null);
+        var user = userService.createManagedUser(new SaveUserCommand(account, "operator@example.invalid", "Test", "01"), null);
         operator = user.getId();
         roles.insert(operator, "ACCOUNT_ADMIN");
         session = new MockHttpSession();
@@ -129,7 +129,7 @@ class UserImportIntegrationTest {
     void databaseConflictAfterPreviewCreatesNoUsers() throws Exception {
         String account = "race-" + UUID.randomUUID();
         String id = preview(workbook(account), "race").get("importId").asText();
-        directory.createManagedUser(new SaveUserCommand(account, "other@example.invalid", "Other", "02"), operator);
+        userService.createManagedUser(new SaveUserCommand(account, "other@example.invalid", "Other", "02"), operator);
         mvc.perform(post("/api/user-imports/" + id + "/commit").session(session)
                 .header(CsrfTokenManager.HEADER_NAME, csrf).header("Idempotency-Key", "race"))
                 .andExpect(status().isConflict());
@@ -196,8 +196,6 @@ class UserImportIntegrationTest {
         assertThat(new UserImportFeature(environment).enabled()).isFalse();
         environment.setProperty("account.user-import.enabled", "true");
         assertThat(new UserImportFeature(environment).enabled()).isTrue();
-        environment.setProperty("account.store.type", "memory");
-        assertThat(new UserImportFeature(environment).enabled()).isFalse();
         var comments = jdbc.queryForList("select remarks from information_schema.columns where table_name = 'ACCOUNT_USER_IMPORTS'",
                 String.class);
         assertThat(comments).hasSize(12).allMatch(value -> value != null && !value.isBlank());
@@ -207,7 +205,7 @@ class UserImportIntegrationTest {
     void defaultImportIsNotAvailableToAuditorsOrOrdinaryUsers() throws Exception {
         for (boolean auditor : new boolean[]{true, false}) {
             String account = "non-admin-" + UUID.randomUUID();
-            var user = directory.createManagedUser(
+            var user = userService.createManagedUser(
                     new SaveUserCommand(account, "reader@example.invalid", "Reader", "01"), operator);
             if (auditor) roles.insert(user.getId(), "ACCOUNT_AUDITOR");
             var reader = new MockHttpSession();
@@ -232,8 +230,8 @@ class UserImportIntegrationTest {
         String[] tooMany = java.util.stream.IntStream.range(0, 1001).mapToObj(i -> "row-" + i).toArray(String[]::new);
         byte[] oversized = workbook(tooMany);
         assertThatThrownBy(() -> codec.read(oversized, "users.xlsx"))
-                .isInstanceOfSatisfying(com.hypers.account.web.management.ApiException.class,
-                        error -> assertThat(error.getStatus()).isEqualTo(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE));
+                .isInstanceOfSatisfying(com.hypers.account.app.exception.BusinessException.class,
+                        error -> assertThat(error.getStatus()).isEqualTo(413));
         try (var book = new XSSFWorkbook(new ByteArrayInputStream(workbook("external")));
              var output = new ByteArrayOutputStream()) {
             var link = book.getCreationHelper().createHyperlink(org.apache.poi.common.usermodel.HyperlinkType.URL);

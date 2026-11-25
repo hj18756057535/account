@@ -1,7 +1,8 @@
 package com.hypers.account.mapper;
 
-import com.hypers.account.app.AccountUser;
-import com.hypers.account.app.UserPageQuery;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.command.UserPageQuery;
+import com.hypers.account.app.model.OverviewCounts;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,7 +11,7 @@ import java.util.List;
 @Mapper
 public interface AccountUserMapper {
 
-    com.hypers.account.app.OverviewCounts selectOverviewCounts(
+    OverviewCounts selectOverviewCounts(
             @Param("disabledBefore") java.time.Instant disabledBefore);
 
     List<String> selectExistingAccounts(@Param("accounts") List<String> accounts);

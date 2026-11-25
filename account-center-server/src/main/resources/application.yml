@@ -16,10 +16,9 @@ spring:
     url: ${ACCOUNT_DB_URL:jdbc:postgresql://10.6.3.14:5432/account_center}
     username: ${ACCOUNT_DB_USERNAME:cms_db_admin}
     password: ${ACCOUNT_DB_PASSWORD:Ky5eanHuZ+SUqm4KHIuq84fTC9AhkDm0+ErQ=Aa9}
+  # 迁移目录由 AccountFlywayConfiguration 按数据库类型选择，这里不再重复配置。
   flyway:
     enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -29,8 +28,6 @@ mybatis:
 account:
   console-api:
     enabled: true
-  store:
-    type: mybatis
   # CMS 本机 OIDC 联调样例，绑定到 OidcProperties。
   # 填好签名文件配置后，将 enabled 改为 true；应用凭据由管理页面维护。
   oidc:

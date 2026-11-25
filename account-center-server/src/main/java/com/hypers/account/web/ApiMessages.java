@@ -44,9 +44,14 @@ public class ApiMessages {
     }
 
     public String text(HttpServletRequest request, String key) {
+        return text(request, key, null);
+    }
+
+    /** 解析消息键，args 为 MessageFormat 参数，为空时按无参模板处理。 */
+    public String text(HttpServletRequest request, String key, Object... args) {
         Locale locale = locale(request);
         String fallback = source.getMessage("error.invalidRequest", null, locale);
-        return key == null ? fallback : source.getMessage(key, null, fallback, locale);
+        return key == null ? fallback : source.getMessage(key, args, fallback, locale);
     }
 
     public Map<String, String> fields(HttpServletRequest request, Map<String, String> keys) {

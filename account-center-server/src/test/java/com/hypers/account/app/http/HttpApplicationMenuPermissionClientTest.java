@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.ApplicationMenuPermissionFailure;
-import com.hypers.account.app.ApplicationSyncPolicy;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.ApplicationMenuPermissionFailure;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
 import com.hypers.account.config.ApplicationSyncProperties;
 import com.hypers.account.contract.AccountIntegrationHeaders;
 import com.hypers.account.contract.AccountIntegrationPaths;
@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
 
 class HttpApplicationMenuPermissionClientTest {
 
@@ -51,10 +50,8 @@ class HttpApplicationMenuPermissionClientTest {
         String base = "http://127.0.0.1:" + server.getAddress().getPort();
         ApplicationSyncProperties properties = new ApplicationSyncProperties();
 
-        MockEnvironment environment = new MockEnvironment().withProperty("account.store.type", "mybatis");
-        environment.setActiveProfiles("test");
         client = new HttpApplicationMenuPermissionClient(
-                new ApplicationSyncPolicy(properties, environment), json, signatures, Clock.systemUTC());
+                new ApplicationSyncPolicy(properties), json, signatures, Clock.systemUTC());
         application = new AccountApplication("app-1", "Synthetic", base, base + "/callback",
                 base + "/permissions", base, SECRET, "default");
         application.setStatus("enabled");

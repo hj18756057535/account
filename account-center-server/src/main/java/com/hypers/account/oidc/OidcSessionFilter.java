@@ -1,6 +1,7 @@
 package com.hypers.account.oidc;
 
-import com.hypers.account.app.AccountStore;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.web.AuthController;
 import jakarta.servlet.FilterChain;
@@ -17,7 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /** 每次用现有可信会话重建标准身份，禁用用户不能沿用旧 SecurityContext。 */
 @RequiredArgsConstructor
 final class OidcSessionFilter extends OncePerRequestFilter {
-    private final AccountStore store;
+    private final UserManagementService userService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -28,7 +29,7 @@ final class OidcSessionFilter extends OncePerRequestFilter {
                 : (AccountSessionUser) session.getAttribute(AuthController.SESSION_USER_KEY);
         if (identity != null) {
             try {
-                if ("enabled".equals(store.requireUser(identity.getUserId()).getStatus())) {
+                if ("enabled".equals(userService.getUser(identity.getUserId()).getStatus())) {
                     var principal = User.withUsername(identity.getUserId()).password("")
                             .authorities("ACCOUNT_USER").build();
                     context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
@@ -36,7 +37,7 @@ final class OidcSessionFilter extends OncePerRequestFilter {
                 } else {
                     session.removeAttribute(AuthController.SESSION_USER_KEY);
                 }
-            } catch (IllegalArgumentException exception) {
+            } catch (BusinessException exception) {
                 session.removeAttribute(AuthController.SESSION_USER_KEY);
             }
         }

@@ -3,6 +3,7 @@ package com.hypers.account.sso;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.hypers.account.app.exception.BusinessException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,8 +28,8 @@ class SsoTicketServiceTest {
                     try {
                         service.exchange("pilot", code);
                         return true;
-                    } catch (SsoTicketException exception) {
-                        assertThat(exception).hasMessageContaining("already used");
+                    } catch (BusinessException exception) {
+                        assertThat(exception.getCode()).isEqualTo("TICKET_INVALID");
                         return false;
                     }
                 }));
@@ -45,11 +46,11 @@ class SsoTicketServiceTest {
         MutableClock clock = new MutableClock(Instant.parse("2026-10-16T00:00:00Z"));
         SsoTicketService service = new SsoTicketService(clock, Duration.ofSeconds(60));
         String code = service.issue("pilot", USER);
-        assertThatThrownBy(() -> service.exchange("other", code)).isInstanceOf(SsoTicketException.class);
+        assertThatThrownBy(() -> service.exchange("other", code)).isInstanceOf(BusinessException.class);
         assertThat(service.exchange("pilot", code).getExternalUserId()).isEqualTo("u-1");
         String expired = service.issue("pilot", USER);
         clock.advance(Duration.ofSeconds(60));
-        assertThatThrownBy(() -> service.exchange("pilot", expired)).hasMessageContaining("expired");
+        assertThatThrownBy(() -> service.exchange("pilot", expired)).satisfies(error -> assertThat(((BusinessException) error).getCode()).isEqualTo("TICKET_INVALID"));
     }
 
     @Test
@@ -64,8 +65,8 @@ class SsoTicketServiceTest {
         assertThat(payload.getAccount()).isEqualTo("zhangsan");
         assertThat(payload.getTenantCode()).isEqualTo("default");
         assertThatThrownBy(() -> service.exchange("cms-ai", code))
-                .isInstanceOf(SsoTicketException.class)
-                .hasMessageContaining("already used");
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getCode()).isEqualTo("TICKET_INVALID"));
     }
 
     @Test
@@ -75,15 +76,15 @@ class SsoTicketServiceTest {
         String code = service.issue("cms-ai", USER);
 
         assertThatThrownBy(() -> service.exchange("other-app", code))
-                .isInstanceOf(SsoTicketException.class)
-                .hasMessageContaining("application mismatch");
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getCode()).isEqualTo("TICKET_INVALID"));
 
         String expiringCode = service.issue("cms-ai", USER);
         clock.advance(Duration.ofSeconds(61));
 
         assertThatThrownBy(() -> service.exchange("cms-ai", expiringCode))
-                .isInstanceOf(SsoTicketException.class)
-                .hasMessageContaining("expired");
+                .isInstanceOf(BusinessException.class)
+                .satisfies(error -> assertThat(((BusinessException) error).getCode()).isEqualTo("TICKET_INVALID"));
     }
 
     private static class MutableClock extends Clock {

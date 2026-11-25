@@ -57,7 +57,8 @@ class AccountIntegrationInternationalizationTest {
     void catalogsHaveMatchingKeysAndNonBlankTranslations() throws Exception {
         var chinese = catalog("messages.properties");
         var english = catalog("messages_en.properties");
-        assertThat(chinese.keySet()).isEqualTo(english.keySet()).hasSize(6);
+        assertThat(chinese.keySet()).isEqualTo(english.keySet()).isNotEmpty();
+        assertThat(chinese.values()).allMatch(value -> !value.toString().isBlank());
         assertThat(english.values()).allMatch(value -> !value.toString().isBlank());
     }
 

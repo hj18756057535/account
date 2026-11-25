@@ -1,5 +1,7 @@
 package com.hypers.account.admin;
 
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.mapper.AdminTicketMapper;
 import java.time.Clock;
 import java.time.ZoneOffset;
@@ -23,7 +25,7 @@ public class SafeAdminTicketService extends AdminTicketService {
         // 票据过期列沿用签发时的 UTC 文本口径，避免 JVM 时区改变比较结果。
         int updated = ticketMapper.consume(ticket, appCode, FORMATTER.format(clock.instant()));
         if (updated != 1) {
-            throw new IllegalArgumentException("ticket 无效或已过期");
+            throw new BusinessException(ErrorCode.TICKET_INVALID);
         }
         String userId = ticketMapper.selectUserIdByCode(ticket);
         return new AdminTicketPayload(appCode, userId);

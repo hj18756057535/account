@@ -2,11 +2,11 @@ package com.hypers.account.app.http;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.ApplicationMenuPermissionClient;
-import com.hypers.account.app.ApplicationMenuPermissionFailure;
-import com.hypers.account.app.ApplicationSyncFailure;
-import com.hypers.account.app.ApplicationSyncPolicy;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.service.ApplicationMenuPermissionClient;
+import com.hypers.account.app.model.ApplicationMenuPermissionFailure;
+import com.hypers.account.app.model.ApplicationSyncFailure;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
 import com.hypers.account.contract.AccountIntegrationHeaders;
 import com.hypers.account.contract.AccountIntegrationPaths;
 import com.hypers.account.contract.MenuPermissionProtocol;

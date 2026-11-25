@@ -1,11 +1,17 @@
 package com.hypers.account.web.management;
 
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.web.ApiMessages;
 import com.hypers.account.web.AuthController;
 import com.hypers.account.web.management.UserImportModels.Preview;
 import com.hypers.account.web.management.UserImportModels.Reference;
 import com.hypers.account.web.management.UserImportModels.Result;
+import com.hypers.account.web.management.service.ExcelUserImportCodec;
+import com.hypers.account.web.management.service.IdempotencyService;
+import com.hypers.account.web.management.service.UserImportService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
@@ -33,7 +39,7 @@ public class UserImportController {
     private final UserImportService service;
     private final IdempotencyService idempotency;
     private final ApiMessages messages;
-    private final com.hypers.account.app.AccountDirectoryService directory;
+    private final UserManagementService userService;
 
     @GetMapping("/template")
     public ResponseEntity<byte[]> template(HttpSession session) {
@@ -77,7 +83,7 @@ public class UserImportController {
         checkEnabled();
         String operator = operator(session);
         if (importId.length() > 64) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "IMPORT_NOT_FOUND", "import.notFound");
+            throw new BusinessException(ErrorCode.IMPORT_NOT_FOUND);
         }
         return idempotency.execute(operator, "POST", "/api/user-imports/" + importId + "/commit",
                 key, importId, 200, Result.class, () -> service.commit(importId, operator));
@@ -93,14 +99,14 @@ public class UserImportController {
     private String operator(HttpSession session) {
         String id = ((AccountSessionUser) session.getAttribute(AuthController.SESSION_USER_KEY)).getUserId();
         try {
-            if ("enabled".equals(directory.getUser(id).getStatus())) return id;
+            if ("enabled".equals(userService.getUser(id).getStatus())) return id;
         } catch (IllegalArgumentException ignored) {
             // 删除或禁用的用户不能复用旧会话导入。
         }
-        throw new ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "error.accessDenied");
+        throw new BusinessException(ErrorCode.ACCESS_DENIED);
     }
 
     private void checkEnabled() {
-        if (!feature.enabled()) throw new ApiException(HttpStatus.NOT_FOUND, "IMPORT_DISABLED", "import.disabled");
+        if (!feature.enabled()) throw new BusinessException(ErrorCode.IMPORT_DISABLED);
     }
 }

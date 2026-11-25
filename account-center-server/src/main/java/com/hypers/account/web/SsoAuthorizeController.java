@@ -1,8 +1,11 @@
 package com.hypers.account.web;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.sso.AccountUserSnapshot;
 import com.hypers.account.sso.SsoTicketService;
@@ -29,7 +32,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SsoAuthorizeController {
 
-    private final AccountDirectoryService directoryService;
+    private final UserManagementService userService;
+    private final ApplicationManagementService applicationService;
+    private final UserApplicationAccessService accessService;
     private final SsoTicketService ticketService;
 
     private final ApiMessages messages;
@@ -51,8 +56,8 @@ public class SsoAuthorizeController {
         // 检查应用是否存在且启用
         AccountApplication application;
         try {
-            application = directoryService.getApplication(appCode);
-        } catch (IllegalArgumentException e) {
+            application = applicationService.getApplication(appCode);
+        } catch (BusinessException e) {
             return "redirect:/sso/error?code=applicationNotFound";
         }
         if ("disabled".equals(application.getStatus())) {
@@ -60,12 +65,12 @@ public class SsoAuthorizeController {
         }
 
         // 检查用户是否授权该应用
-        if (!directoryService.isAuthorized(sessionUser.getUserId(), appCode)) {
+        if (!accessService.isAuthorized(sessionUser.getUserId(), appCode)) {
             return "redirect:/sso/error?code=accessDenied";
         }
 
         // 生成一次性 SSO code
-        AccountUser user = directoryService.getUser(sessionUser.getUserId());
+        AccountUser user = userService.getUser(sessionUser.getUserId());
         String code = ticketService.issue(appCode, new AccountUserSnapshot(
                 user.getId(),
                 user.getAccount(),

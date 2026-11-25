@@ -12,10 +12,13 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
+import com.hypers.account.mapper.OidcAuthorizationMapper;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
@@ -29,16 +32,16 @@ import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2A
 /** 官方持久化 SPI 适配；载荷仅从内部数据库读取，不能由 HTTP 请求提交。 */
 public class PersistentOidcAuthorizationService implements OAuth2AuthorizationService {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() { };
-    private final OidcAuthorizationStore store;
+    private final OidcAuthorizationMapper authorizationMapper;
     private final RegisteredClientRepository clients;
     private final OidcAccessPolicy policy;
     private final Clock clock;
     private final ObjectMapper documents = new ObjectMapper().registerModule(new JavaTimeModule());
     private final ObjectMapper security = new ObjectMapper();
 
-    public PersistentOidcAuthorizationService(OidcAuthorizationStore store,
+    public PersistentOidcAuthorizationService(OidcAuthorizationMapper authorizationMapper,
                                               RegisteredClientRepository clients, OidcAccessPolicy policy, Clock clock) {
-        this.store = store;
+        this.authorizationMapper = authorizationMapper;
         this.clients = clients;
         this.policy = policy;
         this.clock = clock;
@@ -70,7 +73,7 @@ public class PersistentOidcAuthorizationService implements OAuth2AuthorizationSe
             record.setCodeRedeemed(code != null && code.isInvalidated());
             record.setCreatedAt(clock.instant());
             record.setUpdatedAt(clock.instant());
-            store.save(record);
+            save(record);
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to persist OIDC authorization");
         }
@@ -78,12 +81,12 @@ public class PersistentOidcAuthorizationService implements OAuth2AuthorizationSe
 
     @Override
     public void remove(OAuth2Authorization authorization) {
-        store.remove(authorization.getId());
+        authorizationMapper.delete(authorization.getId());
     }
 
     @Override
     public OAuth2Authorization findById(String id) {
-        return restore(store.findById(id));
+        return restore(authorizationMapper.findById(id));
     }
 
     @Override
@@ -92,7 +95,7 @@ public class PersistentOidcAuthorizationService implements OAuth2AuthorizationSe
         String tokenType = type == null ? null : type.getValue();
         if (tokenType != null && !Set.of("state", "code", "access_token", "id_token").contains(tokenType)) return null;
         String digest = hash(value);
-        var record = store.findByTokenHash(digest, tokenType);
+        var record = authorizationMapper.findByTokenHash(digest, tokenType);
         if (record != null && digest.equals(record.getAccessTokenHash())
                 && !policy.allows(record.getPrincipalName(), record.getClientId())) return null;
         return restore(record);
@@ -180,5 +183,17 @@ public class PersistentOidcAuthorizationService implements OAuth2AuthorizationSe
         private Instant issuedAt;
         private Instant expiresAt;
         private String metadata;
+    }
+
+    /** 原子条件更新保证同一授权码只有一次兑换结果能提交。 */
+    private void save(OidcAuthorizationRecord record) {
+        if (authorizationMapper.findById(record.getId()) == null) {
+            if (record.isCodeRedeemed()) {
+                throw new OAuth2AuthenticationException(new OAuth2Error("invalid_grant"));
+            }
+            authorizationMapper.insert(record);
+        } else if (authorizationMapper.update(record) != 1) {
+            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_grant"));
+        }
     }
 }

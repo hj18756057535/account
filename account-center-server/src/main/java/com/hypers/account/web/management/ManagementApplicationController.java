@@ -1,11 +1,18 @@
 package com.hypers.account.web.management;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.ApplicationAccess;
-import com.hypers.account.app.SaveApplicationCommand;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.command.SaveApplicationCommand;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.ApplicationAccess;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.ApplicationSynchronizationService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.web.AuthController;
+import com.hypers.account.web.management.service.IdempotencyService;
+import com.hypers.account.web.management.service.ManagementApplicationWriteService;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,10 +54,12 @@ public class ManagementApplicationController {
     private static final Set<String> APPLICATION_STATUSES =
             new java.util.HashSet<>(Arrays.asList("enabled", "disabled"));
 
-    private final AccountDirectoryService directoryService;
+    private final ApplicationManagementService applicationService;
+    private final UserManagementService userService;
+    private final UserApplicationAccessService accessService;
     private final ManagementApplicationWriteService writeService;
     private final IdempotencyService idempotencyService;
-    private final com.hypers.account.app.ApplicationSynchronizationService synchronizationService;
+    private final ApplicationSynchronizationService synchronizationService;
 
     @GetMapping("/api/applications")
     public List<ApplicationResponse> listApplications(
@@ -64,7 +73,7 @@ public class ManagementApplicationController {
         if (normalizedQuery != null && normalizedQuery.length() > 128) {
             throw validation("query", "validation.query.size");
         }
-        return directoryService.findApplications(normalizedQuery, normalizedStatus).stream()
+        return applicationService.findApplications(normalizedQuery, normalizedStatus).stream()
                 .map(ApplicationResponse::from)
                 .collect(Collectors.toList());
     }
@@ -89,12 +98,7 @@ public class ManagementApplicationController {
 
     @GetMapping("/api/applications/{appCode}")
     public ApplicationResponse getApplication(@PathVariable String appCode) {
-        try {
-            return ApplicationResponse.from(directoryService.getApplication(appCode));
-        } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.NOT_FOUND,
-                    "APPLICATION_NOT_FOUND", "error.applicationNotFound");
-        }
+        return ApplicationResponse.from(applicationService.getApplication(appCode));
     }
 
     @PutMapping("/api/applications/{appCode}")
@@ -180,16 +184,12 @@ public class ManagementApplicationController {
     @GetMapping("/api/users/{userId}/application-access")
     public List<ApplicationAccessResponse> listApplicationAccess(@PathVariable String userId) {
         validateUserId(userId);
-        Map<String, AccountApplication> applications = directoryService.findApplications(null, null).stream()
+        Map<String, AccountApplication> applications = applicationService.findApplications(null, null).stream()
                 .collect(Collectors.toMap(AccountApplication::getAppCode, Function.identity()));
-        try {
-            return directoryService.getUserApplicationAccess(userId).stream()
-                    .peek(access -> synchronizationService.decorate(access, applications.get(access.getAppCode())))
-                    .map(access -> ApplicationAccessResponse.from(access, applications.get(access.getAppCode())))
-                    .collect(Collectors.toList());
-        } catch (IllegalArgumentException exception) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "error.userNotFound");
-        }
+        return accessService.getUserApplicationAccess(userId).stream()
+                .peek(access -> synchronizationService.decorate(access, applications.get(access.getAppCode())))
+                .map(access -> ApplicationAccessResponse.from(access, applications.get(access.getAppCode())))
+                .collect(Collectors.toList());
     }
 
     @PutMapping("/api/users/{userId}/application-access/{appCode}")
@@ -219,7 +219,7 @@ public class ManagementApplicationController {
                                 request.getVersion(),
                                 RequestTraceFilter.traceId(servletRequest),
                                 operatorId, request.isConfirmPermissionReuse()),
-                        directoryService.getApplication(appCode)));
+                        applicationService.getApplication(appCode)));
         return ResponseEntity.accepted().body(response);
     }
 
@@ -236,8 +236,8 @@ public class ManagementApplicationController {
         validateUserId(userId);
         validateAppCode(appCode);
         String operator = operatorId(session);
-        if (!"enabled".equals(directoryService.getUser(operator).getStatus()))
-            throw new ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "error.accessDenied");
+        if (!"enabled".equals(userService.getUser(operator).getStatus()))
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
         var response = idempotencyService.execute(operator, "POST",
                 "/api/users/" + userId + "/applications/" + appCode + "/synchronizations",
                 idempotencyKey, request, 202, ApplicationAccessResponse.class, () -> {
@@ -269,10 +269,8 @@ public class ManagementApplicationController {
         }
     }
 
-    private static ApiException validation(String field, String message) {
-        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                "VALIDATION_FAILED", "error.validation",
-                Collections.singletonMap(field, message));
+    private static BusinessException validation(String field, String message) {
+        return new BusinessException(ErrorCode.VALIDATION_FAILED, Collections.singletonMap(field, message));
     }
 
     private String normalize(String value) {

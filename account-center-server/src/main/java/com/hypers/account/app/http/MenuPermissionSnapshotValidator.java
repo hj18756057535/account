@@ -1,7 +1,7 @@
 package com.hypers.account.app.http;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.hypers.account.app.ApplicationMenuPermissionFailure;
+import com.hypers.account.app.model.ApplicationMenuPermissionFailure;
 import com.hypers.account.contract.MenuPermissionProtocol;
 import com.hypers.account.contract.application.MenuPermissionNode;
 import com.hypers.account.contract.application.MenuPermissionSnapshot;

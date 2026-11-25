@@ -3,9 +3,11 @@ package com.hypers.account.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import java.io.IOException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,7 +20,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AdminTicketIssueValidationFilter extends OncePerRequestFilter {
 
-    private final AccountDirectoryService directoryService;
+    private final UserManagementService userService;
+    private final ApplicationManagementService applicationService;
+    private final UserApplicationAccessService accessService;
     private final ObjectMapper objectMapper;
 
     private final LegacyApiErrorWriter errors;
@@ -38,11 +42,11 @@ public class AdminTicketIssueValidationFilter extends OncePerRequestFilter {
             JsonNode json = objectMapper.readTree(wrapped.getCachedBodyAsString());
             String appCode = required(json, "appCode");
             String userId = required(json, "userId");
-            AccountApplication application = directoryService.getApplication(appCode);
-            AccountUser user = directoryService.getUser(userId);
+            AccountApplication application = applicationService.getApplication(appCode);
+            AccountUser user = userService.getUser(userId);
             if ("disabled".equals(application.getStatus())
                     || "disabled".equals(user.getStatus())
-                    || !directoryService.isAuthorized(userId, appCode)) {
+                    || !accessService.isAuthorized(userId, appCode)) {
                 errors.write(request, response, HttpServletResponse.SC_BAD_REQUEST, "error.ticketRequest");
                 return;
             }

@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.ApplicationSyncPolicy;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
 import com.hypers.account.config.ApplicationSyncProperties;
 import com.hypers.account.contract.AccountIntegrationHeaders;
 import com.hypers.account.contract.AccountProviderProtocol;
 import com.hypers.account.security.HmacSignatureService;
-import com.hypers.account.web.management.ApiException;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
+
 
 class ApplicationDirectoryClientTest {
     private HttpServer server;
@@ -58,8 +58,8 @@ class ApplicationDirectoryClientTest {
             exchange.close();
         });
         server.start();
-        client = new ApplicationDirectoryClient(new ApplicationSyncPolicy(new ApplicationSyncProperties(),
-                new MockEnvironment()), json, signatures, Clock.systemUTC());
+        client = new ApplicationDirectoryClient(new ApplicationSyncPolicy(new ApplicationSyncProperties()),
+                json, signatures, Clock.systemUTC());
     }
 
     @AfterEach
@@ -77,6 +77,6 @@ class ApplicationDirectoryClientTest {
     @Test
     void numericWireIdsAreRejectedRatherThanCoerced() {
         numericId.set(true);
-        assertThatThrownBy(() -> client.check(app)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> client.check(app)).isInstanceOf(BusinessException.class);
     }
 }

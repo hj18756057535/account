@@ -2,15 +2,16 @@ package com.hypers.account.app.directory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.ApplicationSyncFailure;
-import com.hypers.account.app.ApplicationSyncPolicy;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.ApplicationSyncFailure;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
 import com.hypers.account.contract.AccountIntegrationHeaders;
 import com.hypers.account.contract.AccountProviderProtocol;
 import com.hypers.account.contract.directory.AccountDirectoryPage;
 import com.hypers.account.contract.directory.AccountDirectoryQuery;
 import com.hypers.account.security.HmacSignatureService;
-import com.hypers.account.web.management.ApiException;
 import java.net.URI;
 import java.math.BigInteger;
 import java.net.http.HttpClient;
@@ -57,7 +58,7 @@ public class ApplicationDirectoryClient {
                         : "roles".equals(kind) ? page.getRoles().size() : page.getOrganizations().size();
                 total += count;
                 if (total > MAX_ITEMS) {
-                    throw failure("DIRECTORY_TOO_LARGE", "directory.tooLarge");
+                    throw new BusinessException(ErrorCode.DIRECTORY_TOO_LARGE);
                 }
                 snapshot.getUsers().addAll(page.getUsers());
                 snapshot.getRoles().addAll(page.getRoles());
@@ -79,7 +80,7 @@ public class ApplicationDirectoryClient {
         try {
             base = policy.target(app);
         } catch (ApplicationSyncFailure | IllegalArgumentException error) {
-            throw failure("DIRECTORY_NOT_CONFIGURED", "directory.notConfigured");
+            throw new BusinessException(ErrorCode.DIRECTORY_NOT_CONFIGURED);
         }
         AccountDirectoryQuery query = new AccountDirectoryQuery();
         query.setKind(kind);
@@ -103,13 +104,13 @@ public class ApplicationDirectoryClient {
             pending = client.sendAsync(request, ignored -> new LimitedBody());
             HttpResponse<byte[]> response = pending.get(6, TimeUnit.SECONDS);
             if (response.statusCode() == 401 || response.statusCode() == 403) {
-                throw failure("DIRECTORY_AUTH_FAILED", "directory.authFailed");
+                throw new BusinessException(ErrorCode.DIRECTORY_AUTH_FAILED);
             }
             if (response.statusCode() == 404 || response.statusCode() == 426) {
-                throw failure("DIRECTORY_PROVIDER_MISSING", "directory.providerMissing");
+                throw new BusinessException(ErrorCode.DIRECTORY_PROVIDER_MISSING);
             }
             if (response.statusCode() != 200) {
-                throw failure("DIRECTORY_UNAVAILABLE", "directory.unavailable");
+                throw new BusinessException(ErrorCode.DIRECTORY_UNAVAILABLE);
             }
             JsonNode tree = json.readTree(response.body());
             if (tree == null || !app.getAppCode().equals(tree.path("appCode").asText())
@@ -149,13 +150,13 @@ public class ApplicationDirectoryClient {
                 throw invalid();
             }
             return result;
-        } catch (ApiException error) {
+        } catch (BusinessException error) {
             throw error;
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
-            throw failure("DIRECTORY_UNAVAILABLE", "directory.unavailable");
+            throw new BusinessException(ErrorCode.DIRECTORY_UNAVAILABLE);
         } catch (Exception error) {
-            throw failure("DIRECTORY_UNAVAILABLE", "directory.unavailable");
+            throw new BusinessException(ErrorCode.DIRECTORY_UNAVAILABLE);
         } finally {
             if (pending != null && !pending.isDone()) {
                 pending.cancel(true);
@@ -163,8 +164,8 @@ public class ApplicationDirectoryClient {
         }
     }
 
-    private ApiException invalid() {
-        return failure("DIRECTORY_RESULT_INVALID", "directory.invalid");
+    private BusinessException invalid() {
+        return new BusinessException(ErrorCode.DIRECTORY_RESULT_INVALID);
     }
 
     private void validateReferences(JsonNode values) {
@@ -176,10 +177,6 @@ public class ApplicationDirectoryClient {
                 throw invalid();
             }
         }
-    }
-
-    private ApiException failure(String code, String key) {
-        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, code, key);
     }
 
     private static class LimitedBody implements HttpResponse.BodySubscriber<byte[]> {

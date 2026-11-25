@@ -2,7 +2,7 @@ package com.hypers.account.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.hypers.account.app.AccountUser;
+import com.hypers.account.app.model.AccountUser;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.mapper.AccountUserMapper;
 import com.hypers.account.web.AuthController;

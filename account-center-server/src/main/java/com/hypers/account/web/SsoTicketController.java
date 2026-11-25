@@ -1,8 +1,12 @@
 package com.hypers.account.web;
 
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountUser;
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.sso.AccountUserSnapshot;
 import com.hypers.account.sso.SsoTicketService;
 import com.hypers.account.sso.SsoUserPayload;
@@ -16,26 +20,33 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class SsoTicketController {
 
-    private final AccountDirectoryService directoryService;
+    private final UserManagementService userService;
+    private final ApplicationManagementService applicationService;
+    private final UserApplicationAccessService accessService;
     private final SsoTicketService ticketService;
 
-    public SsoTicketController(AccountDirectoryService directoryService, SsoTicketService ticketService) {
-        this.directoryService = directoryService;
+    public SsoTicketController(UserManagementService userService,
+                               ApplicationManagementService applicationService,
+                               UserApplicationAccessService accessService,
+                               SsoTicketService ticketService) {
+        this.userService = userService;
+        this.applicationService = applicationService;
+        this.accessService = accessService;
         this.ticketService = ticketService;
     }
 
     @PostMapping("/api/sso/tickets")
     public IssueTicketResponse issueTicket(@Valid @RequestBody IssueTicketRequest request) {
-        AccountUser user = directoryService.getUser(request.getUserId());
+        AccountUser user = userService.getUser(request.getUserId());
         if ("disabled".equals(user.getStatus())) {
-            throw new IllegalArgumentException("user is disabled");
+            throw new BusinessException(ErrorCode.USER_DISABLED);
         }
-        AccountApplication application = directoryService.getApplication(request.getAppCode());
+        AccountApplication application = applicationService.getApplication(request.getAppCode());
         if ("disabled".equals(application.getStatus())) {
-            throw new IllegalArgumentException("application is disabled");
+            throw new BusinessException(ErrorCode.APPLICATION_DISABLED);
         }
-        if (!directoryService.isAuthorized(request.getUserId(), request.getAppCode())) {
-            throw new IllegalArgumentException("user is not authorized for application");
+        if (!accessService.isAuthorized(request.getUserId(), request.getAppCode())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
         String code = ticketService.issue(application.getAppCode(), new AccountUserSnapshot(
                 user.getId(),
@@ -51,9 +62,9 @@ public class SsoTicketController {
     public SsoUserPayload exchange(@Valid @RequestBody ExchangeTicketRequest request) {
         SsoUserPayload payload = ticketService.exchange(request.getAppCode(), request.getCode());
         // 托管应用在签发后仍可能被撤销，兑换时再次检查当前准入确认。
-        if (directoryService.getApplication(request.getAppCode()).hasProviderConfiguration()
-                && !directoryService.isAuthorized(payload.getExternalUserId(), request.getAppCode())) {
-            throw new com.hypers.account.sso.SsoTicketException("user is not authorized for application");
+        if (applicationService.getApplication(request.getAppCode()).hasProviderConfiguration()
+                && !accessService.isAuthorized(payload.getExternalUserId(), request.getAppCode())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
         return payload;
     }

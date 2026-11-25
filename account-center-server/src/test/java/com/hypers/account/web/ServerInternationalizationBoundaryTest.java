@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
+import com.hypers.account.app.model.AccountApplication;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.security.OpenApiSignatureVerifier;
 import jakarta.servlet.RequestDispatcher;

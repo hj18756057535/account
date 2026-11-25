@@ -1,11 +1,21 @@
 package com.hypers.account.app;
 
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.model.AccountUser;
+import com.hypers.account.app.model.ApplicationSyncDelivery;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.ApplicationSyncPolicy;
+import com.hypers.account.app.service.ApplicationSyncTransport;
+import com.hypers.account.app.service.ApplicationSynchronizationService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
+import com.hypers.account.mapper.ApplicationSyncMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.directory.DirectoryImportStore;
+import com.hypers.account.mapper.DirectoryImportMapper;
 import com.hypers.account.audit.AuditLogService;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -21,8 +31,10 @@ class ApplicationSyncTimingTest {
     @Test
     void anImmediateDeliveryRemainsDueAfterDatabaseTimestampRounding() {
         Instant now = Instant.parse("2026-11-24T00:00:00.123456700Z");
-        ApplicationSyncStore store = mock(ApplicationSyncStore.class);
-        AccountDirectoryService directory = mock(AccountDirectoryService.class);
+        ApplicationSyncMapper store = mock(ApplicationSyncMapper.class);
+        ApplicationManagementService applicationService = mock(ApplicationManagementService.class);
+        UserManagementService userService = mock(UserManagementService.class);
+        UserApplicationAccessService accessService = mock(UserApplicationAccessService.class);
         ApplicationSyncPolicy policy = mock(ApplicationSyncPolicy.class);
         AccountApplication app = new AccountApplication("fixture-app", "Fixture", "https://cms.example.test",
                 "https://cms.example.test/callback", "", "https://cms.example.test", "synthetic-secret", "default");
@@ -37,15 +49,15 @@ class ApplicationSyncTimingTest {
         delivery.setDesiredStatus("enabled");
         delivery.setSyncVersion(1);
         delivery.setCreatedAt(now);
-        when(policy.databaseMode()).thenReturn(true);
         when(policy.canDeliver(app)).thenReturn(true);
         when(store.find(delivery.getId())).thenReturn(delivery);
-        when(directory.getApplication(app.getAppCode())).thenReturn(app);
-        when(directory.getUser(user.getId())).thenReturn(user);
-        ApplicationSynchronizationService service = new ApplicationSynchronizationService(store, directory, policy,
-                mock(ApplicationSyncTransport.class), new ObjectMapper().findAndRegisterModules(),
+        when(applicationService.getApplication(app.getAppCode())).thenReturn(app);
+        when(userService.getUser(user.getId())).thenReturn(user);
+        ApplicationSynchronizationService service = new ApplicationSynchronizationService(store, applicationService,
+                userService, accessService, policy, mock(ApplicationSyncTransport.class),
+                new ObjectMapper().findAndRegisterModules(),
                 Clock.fixed(now, ZoneOffset.UTC), mock(PlatformTransactionManager.class),
-                mock(AuditLogService.class), mock(DirectoryImportStore.class));
+                mock(AuditLogService.class), mock(DirectoryImportMapper.class));
         service.created(delivery.getId(), "fixture-admin");
 
         JdbcTemplate jdbc = new JdbcTemplate(new DriverManagerDataSource(

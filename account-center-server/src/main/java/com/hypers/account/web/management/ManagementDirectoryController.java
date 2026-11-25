@@ -1,19 +1,20 @@
 package com.hypers.account.web.management;
 
-import com.hypers.account.app.AccountDirectoryService;
 import com.hypers.account.app.directory.ApplicationDirectoryClient;
 import com.hypers.account.app.directory.ApplicationDirectorySnapshot;
 import com.hypers.account.app.directory.DirectoryImportPreview;
 import com.hypers.account.app.directory.DirectoryImportResult;
 import com.hypers.account.app.directory.DirectoryImportService;
+import com.hypers.account.app.service.ApplicationManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.web.AuthController;
+import com.hypers.account.web.management.service.IdempotencyService;
 import jakarta.servlet.http.HttpSession;
 import java.time.Clock;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,9 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 /** 现有管理员 Session/CSRF 拦截器统一保护本控制器，不允许前端直连 CMS。 */
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnExpression("${account.console-api.enabled:true} and '${account.store.type:mybatis}' == 'mybatis'")
+@ConditionalOnProperty(name = "account.console-api.enabled", havingValue = "true", matchIfMissing = true)
 public class ManagementDirectoryController {
-    private final AccountDirectoryService directory;
+    private final ApplicationManagementService applicationService;
     private final ApplicationDirectoryClient client;
     private final DirectoryImportService imports;
     private final IdempotencyService idempotency;
@@ -35,7 +36,7 @@ public class ManagementDirectoryController {
 
     @PostMapping("/api/applications/{appCode}/connection-check")
     public ResponseEntity<ConnectionResult> check(@PathVariable String appCode) {
-        client.check(directory.getApplication(appCode));
+        client.check(applicationService.getApplication(appCode));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new ConnectionResult(true, clock.instant()));
     }
 

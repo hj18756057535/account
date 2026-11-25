@@ -1,7 +1,9 @@
 package com.hypers.account.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountDirectoryService;
+import com.hypers.account.app.service.ApplicationManagementService;
+import com.hypers.account.app.service.UserApplicationAccessService;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.security.OpenApiSignatureVerifier;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -23,10 +25,13 @@ public class SecurityFilterConfiguration {
 
     @Bean
     public FilterRegistrationBean<AdminTicketIssueValidationFilter> adminTicketIssueValidationFilter(
-            AccountDirectoryService directoryService,
+            UserManagementService userService,
+            ApplicationManagementService applicationService,
+            UserApplicationAccessService accessService,
             ObjectMapper objectMapper, LegacyApiErrorWriter errors) {
         FilterRegistrationBean<AdminTicketIssueValidationFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new AdminTicketIssueValidationFilter(directoryService, objectMapper, errors));
+        registration.setFilter(new AdminTicketIssueValidationFilter(
+                userService, applicationService, accessService, objectMapper, errors));
         registration.addUrlPatterns("/api/admin-tickets");
         registration.setOrder(2);
         return registration;

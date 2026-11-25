@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.hypers.account.mapper.UserImportMapper">
-    <resultMap id="batch" type="com.hypers.account.app.UserImportBatch">
+    <resultMap id="batch" type="com.hypers.account.app.model.UserImportBatch">
         <id property="id" column="id"/>
         <result property="fileHash" column="file_hash"/>
         <result property="rowCount" column="row_count"/>

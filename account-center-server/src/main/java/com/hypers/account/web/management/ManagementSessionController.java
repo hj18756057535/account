@@ -1,5 +1,7 @@
 package com.hypers.account.web.management;
 
+import com.hypers.account.app.exception.BusinessException;
+import com.hypers.account.app.exception.ErrorCode;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.auth.AdminAuthorizationService;
@@ -50,18 +52,16 @@ public class ManagementSessionController {
         AccountSessionUser user;
         try {
             user = loginService.authenticate(loginRequest.getAccount(), loginRequest.getPassword());
-        } catch (IllegalArgumentException exception) {
+        } catch (BusinessException exception) {
             securityAudit.record(null, "MANAGEMENT_LOGIN_FAILED", false);
-            throw new ApiException(HttpStatus.UNAUTHORIZED,
-                    "INVALID_CREDENTIALS", "error.credentials");
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
         List<String> roles = authorizationService.findRoles(user.getUserId());
         if (!roles.contains(AdminAuthorizationService.ACCOUNT_ADMIN)
                 && !roles.contains(AdminAuthorizationService.ACCOUNT_AUDITOR)) {
             securityAudit.record(user.getUserId(), "MANAGEMENT_ACCESS_DENIED", false);
             request.getSession(false).invalidate();
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "MANAGEMENT_ACCESS_DENIED", "error.managementDenied");
+            throw new BusinessException(ErrorCode.MANAGEMENT_ACCESS_DENIED);
         }
         request.changeSessionId();
         HttpSession session = request.getSession(false);

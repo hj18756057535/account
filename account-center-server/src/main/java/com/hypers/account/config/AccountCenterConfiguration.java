@@ -1,32 +1,25 @@
 package com.hypers.account.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hypers.account.admin.AdminTicketService;
-import com.hypers.account.app.AccountDirectoryService;
-import com.hypers.account.app.AccountStore;
-import com.hypers.account.app.InMemoryAccountStore;
-import com.hypers.account.app.MyBatisAccountStore;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AdminAuthorizationService;
 import com.hypers.account.audit.AuditLogService;
-import com.hypers.account.mapper.AccountApplicationMapper;
-import com.hypers.account.mapper.AccountUserApplicationMapper;
 import com.hypers.account.mapper.AccountUserMapper;
 import com.hypers.account.mapper.AdminRoleMapper;
 import com.hypers.account.mapper.AdminTicketMapper;
 import com.hypers.account.mapper.AuditLogMapper;
-import com.hypers.account.mapper.SyncCommandMapper;
 import com.hypers.account.security.HmacSignatureService;
 import com.hypers.account.sso.SsoTicketService;
 import java.time.Clock;
 import java.time.Duration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * Account Center 核心配置。
- * 管理 Store 实现切换、同步客户端选择和 SSO 参数。
+ *
+ * <p>只装配无状态组件和需要显式参数的 Bean；业务服务统一使用 {@code @Service} 注解，
+ * 持久化由 MyBatis Mapper 直接提供。
  */
 @Configuration
 public class AccountCenterConfiguration {
@@ -37,34 +30,13 @@ public class AccountCenterConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "account.store.type", havingValue = "memory")
-    public AccountStore inMemoryAccountStore(Clock clock) {
-        return new InMemoryAccountStore(clock);
-    }
-
-    @Bean
-    @ConditionalOnProperty(name = "account.store.type", havingValue = "mybatis", matchIfMissing = true)
-    public AccountStore myBatisAccountStore(AccountUserMapper userMapper,
-                                            AccountApplicationMapper applicationMapper,
-                                            AccountUserApplicationMapper userApplicationMapper,
-                                            SyncCommandMapper syncCommandMapper) {
-        return new MyBatisAccountStore(userMapper, applicationMapper, userApplicationMapper, syncCommandMapper);
-    }
-
-    @Bean
     public HmacSignatureService hmacSignatureService() {
         return new HmacSignatureService();
     }
 
     @Bean
-    public AccountDirectoryService accountDirectoryService(
-            AccountStore store) {
-        return new AccountDirectoryService(store);
-    }
-
-    @Bean
-    public AccountLoginService accountLoginService(AccountStore store) {
-        return new AccountLoginService(store);
+    public AccountLoginService accountLoginService(AccountUserMapper userMapper) {
+        return new AccountLoginService(userMapper);
     }
 
     @Bean

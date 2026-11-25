@@ -61,7 +61,7 @@ List<String> userIds = userApplications.stream()
         .collect(Collectors.toList());
 
 // 一次性批量查询
-Map<String, AccountUser> userMap = store.findUsersByIds(userIds).stream()
+Map<String, AccountUser> userMap = userMapper.selectByIds(userIds).stream()
         .collect(Collectors.toMap(AccountUser::getId, u -> u));
 
 // 内存映射组装
@@ -71,15 +71,15 @@ for (AccountApplication app : applications) {
 }
 ```
 
-### Store 层封装批量方法
+### Mapper 声明批量查询
 
 ```java
-// AccountStore 接口
+// 对应聚合的 Mapper 接口（AccountUserMapper / AccountUserApplicationMapper）
 List<AccountUser> findUsersByIds(List<String> ids);
 Map<String, List<AccountApplication>> findAuthorizedApplicationsByUserIds(List<String> userIds);
 ```
 
-批量查询方法应同时在 `MyBatisAccountStore` 和 `InMemoryAccountStore` 中实现。
+批量查询写在对应 Mapper 和 XML 中，由 Service 调用，并用 H2 的真实 SQL 覆盖。
 
 ## LIKE 查询
 
@@ -100,7 +100,7 @@ Java 代码中不要手动拼接 `%` 到参数中再传给 Mapper。
 批量查询方法必须对空输入做保护：
 
 ```java
-// MyBatisAccountStore
+// MyBatis Mapper 实现（XML 定义 SQL）
 @Override
 public List<AccountUser> findUsersByIds(List<String> ids) {
     if (ids == null || ids.isEmpty()) {
@@ -134,7 +134,7 @@ XML 中 `<foreach>` 对空集合会生成 `WHERE id IN ()`，这在 PostgreSQL �
 - [ ] 没有 O(n²) 列表匹配。
 - [ ] 批量查询对空集合直接返回空集合。
 - [ ] `toMap` 处理重复 key，或业务确认不会重复。
-- [ ] `InMemoryAccountStore` 和 `MyBatisAccountStore` 中新增的批量方法行为一致。
+- [ ] 新增的批量方法有对应的 Mapper XML 语句和 H2 回归用例。
 - [ ] XML 中 `<foreach>` 语法正确，参数类型匹配。
 - [ ] 受影响模块编译或测试已执行；若无法执行，说明原因。
 

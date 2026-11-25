@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountStore;
+import com.hypers.account.app.service.UserManagementService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.auth.AdminAuthorizationService;
 import com.hypers.account.mapper.IdempotencyRecordMapper;
@@ -40,7 +40,7 @@ class ManagementIdempotencyTransactionIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AccountStore accountStore;
+    private UserManagementService userService;
 
     @MockitoBean
     private AdminAuthorizationService authorizationService;
@@ -71,6 +71,6 @@ class ManagementIdempotencyTransactionIntegrationTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
 
-        assertNull(accountStore.findUserByAccount("rollback-user"));
+        assertNull(userService.findByAccount("rollback-user"));
     }
 }

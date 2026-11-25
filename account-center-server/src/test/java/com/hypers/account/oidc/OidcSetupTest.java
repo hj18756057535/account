@@ -1,13 +1,14 @@
 package com.hypers.account.oidc;
 
+import com.hypers.account.web.management.ManagementApplicationController;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hypers.account.app.AccountApplication;
-import com.hypers.account.app.AccountStore;
+import com.hypers.account.app.model.AccountApplication;
+import com.hypers.account.app.service.ApplicationManagementService;
 import com.hypers.account.web.management.ManagementApplicationController.CreateApplicationRequest;
 import jakarta.validation.Validation;
 import java.nio.charset.StandardCharsets;
@@ -56,7 +57,7 @@ class OidcSetupTest {
         var source = new MapConfigurationPropertySource();
         server.forEach((key, value) -> source.put((String) key, value));
         var bound = new Binder(source).bind("account.oidc", Bindable.of(OidcProperties.class)).get();
-        var store = mock(AccountStore.class);
+        var applicationService = mock(ApplicationManagementService.class);
         var app = new AccountApplication();
         app.setAppCode("agent");
         app.setName("Agent");
@@ -65,8 +66,8 @@ class OidcSetupTest {
         app.setSecret(changed.path("client_secret").asText());
         app.setNotifyBaseUrl("");
         app.setSsoCallbackUrl(changed.path("redirect_uri").asText());
-        when(store.requireApplication("agent")).thenReturn(app);
-        var repository = new OidcConfiguration().oidcClients(store, bound);
+        when(applicationService.getApplication("agent")).thenReturn(app);
+        var repository = new OidcConfiguration().oidcClients(applicationService, bound);
         assertThat(repository.findByClientId("agent").getRedirectUris()).containsExactly(app.getSsoCallbackUrl());
 
         var registration = json.readValue(directory.resolve("application-registration.json").toFile(), CreateApplicationRequest.class);
