@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
@@ -144,6 +145,45 @@ class AccountOidcLoginTest {
         assertThat(identity.getAccount()).isEqualTo("fixture-account");
         assertThat(identity.getDisplayName()).isEqualTo("Fixture User");
         assertThat(anotherInstance.consumeIdentity(redeem, new MockHttpServletResponse())).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void aSecondStartDoesNotInvalidatePendingBrowserAuthorizations(boolean newerFirst) {
+        MockHttpServletResponse firstStart = new MockHttpServletResponse();
+        URI first = login.begin(new MockHttpServletRequest("GET", AccountOidcLogin.START_PATH), firstStart);
+        Cookie originalBrowser = cookie(firstStart, "-request");
+        MockHttpServletRequest secondRequest = new MockHttpServletRequest("GET", AccountOidcLogin.START_PATH);
+        secondRequest.setCookies(originalBrowser);
+        MockHttpServletResponse secondStart = new MockHttpServletResponse();
+        URI second = login.begin(secondRequest, secondStart);
+        Cookie browser = cookie(secondStart, "-request");
+
+        URI current = newerFirst ? second : first;
+        URI pending = newerFirst ? first : second;
+        nonce = parameter(current, "nonce");
+        MockHttpServletResponse secondComplete = new MockHttpServletResponse();
+        assertThat(login.complete(callback(parameter(current, "state"), browser), secondComplete)).isTrue();
+        boolean deletesBrowserBinding = Arrays.stream(secondComplete.getCookies())
+                .anyMatch(value -> value.getName().equals(browser.getName()) && value.getMaxAge() == 0);
+        assertThat(deletesBrowserBinding).isFalse();
+        nonce = parameter(pending, "nonce");
+        assertThat(login.complete(callback(parameter(pending, "state"), browser), new MockHttpServletResponse())).isTrue();
+        assertThat(login.complete(callback(parameter(current, "state"), browser), new MockHttpServletResponse())).isFalse();
+    }
+
+    @Test
+    void abandonedExpiredRequestDoesNotPreventStartingAgain() {
+        MockHttpServletResponse first = new MockHttpServletResponse();
+        login.begin(new MockHttpServletRequest("GET", AccountOidcLogin.START_PATH), first);
+        values.clear();
+        MockHttpServletRequest retry = new MockHttpServletRequest("GET", AccountOidcLogin.START_PATH);
+        retry.setCookies(cookie(first, "-request"));
+        MockHttpServletResponse restarted = new MockHttpServletResponse();
+        URI authorization = login.begin(retry, restarted);
+        nonce = parameter(authorization, "nonce");
+        assertThat(login.complete(callback(parameter(authorization, "state"), cookie(restarted, "-request")),
+                new MockHttpServletResponse())).isTrue();
     }
 
     @Test

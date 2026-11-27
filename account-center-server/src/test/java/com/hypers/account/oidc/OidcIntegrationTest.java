@@ -24,6 +24,7 @@ import com.nimbusds.jose.jwk.JWKSelector;
 import com.nimbusds.jose.jwk.JWKMatcher;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -158,6 +159,28 @@ class OidcIntegrationTest {
         assertThat(((AccountSessionUser) session.getAttribute(AuthController.SESSION_USER_KEY)).getUserId())
                 .isEqualTo(user.getId());
         assertThat(code(authorize(session, challenge(VERIFIER), CALLBACK))).isNotBlank();
+    }
+
+    @Test
+    void secondAuthorizationAfterAbandonedLoginResumesTheLatestRequest() throws Exception {
+        var first = authorize(null, challenge(VERIFIER), CALLBACK, "abandoned-state", "abandoned-nonce");
+        var session = (MockHttpSession) first.getRequest().getSession(false);
+        var firstPage = mvc.perform(get("/login").session(session)).andExpect(status().isOk()).andReturn();
+        String nextVerifier = "second-verifier-0123456789012345678901234567890123456789";
+        var second = authorize(session, challenge(nextVerifier), CALLBACK, "second-state", "second-nonce");
+        assertThat(second.getResponse().getRedirectedUrl()).endsWith("/login");
+
+        var signedIn = mvc.perform(post("/login").session(session)
+                        .param("account", user.getAccount()).param("password", PASSWORD)
+                        .param("_csrf", csrf(firstPage)))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        String resumed = signedIn.getResponse().getRedirectedUrl();
+        assertThat(resumed).contains("state=second-state", "nonce=second-nonce");
+        var authorized = mvc.perform(get(URI.create(resumed)).session(session)).andReturn();
+        var tokens = exchange(code(authorized), nextVerifier, CLIENT_SECRET);
+        assertThat(tokens.getResponse().getStatus()).isEqualTo(200);
+        assertThat(decoder().decode(body(tokens).path("id_token").asText()).getClaimAsString("nonce"))
+                .isEqualTo("second-nonce");
     }
 
     @Test
@@ -405,9 +428,14 @@ class OidcIntegrationTest {
     }
 
     private MvcResult authorize(MockHttpSession session, String challenge, String callback) throws Exception {
+        return authorize(session, challenge, callback, "test-state", NONCE);
+    }
+
+    private MvcResult authorize(MockHttpSession session, String challenge, String callback,
+                                String state, String nonce) throws Exception {
         var request = get("/oauth2/authorize")
                 .queryParam("client_id", CLIENT).queryParam("redirect_uri", callback).queryParam("response_type", "code")
-                .queryParam("scope", "openid profile").queryParam("state", "test-state").queryParam("nonce", NONCE)
+                .queryParam("scope", "openid profile").queryParam("state", state).queryParam("nonce", nonce)
                 .queryParam("code_challenge", challenge).queryParam("code_challenge_method", "S256");
         if (session != null) request.session(session);
         return mvc.perform(request).andReturn();

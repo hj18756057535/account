@@ -24,6 +24,7 @@ public class RequestTraceFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String requestUri = request.getRequestURI();
         return !"/api/session".equals(requestUri)
+                && !"/api/session/applications".equals(requestUri)
                 && !"/api/overview".equals(requestUri)
                 && !requestUri.startsWith("/api/user-imports/")
                 && !"/api/users".equals(requestUri)

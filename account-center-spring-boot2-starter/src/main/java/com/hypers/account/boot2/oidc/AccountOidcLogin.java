@@ -77,7 +77,11 @@ public final class AccountOidcLogin {
 
     URI begin(HttpServletRequest request, HttpServletResponse response) {
         OAuth2AuthorizationRequest authorization = client.authorizationRequest(request);
-        String browser = BROWSER_CODES.generateKey();
+        // 同一浏览器的待完成请求按 state 隔离，重新发起不覆盖其他页面的关联。
+        String browser = readCookie(request, requestCookie);
+        if (browser == null) {
+            browser = BROWSER_CODES.generateKey();
+        }
         AccountOidcClient.AuthorizationProof proof = new AccountOidcClient.AuthorizationProof(
                 authorization.getAttribute(OidcParameterNames.NONCE),
                 authorization.getAttribute(PkceParameterNames.CODE_VERIFIER));
@@ -97,7 +101,7 @@ public final class AccountOidcLogin {
         if (serialized == null) {
             return false;
         }
-        setCookie(response, requestCookie, "", Duration.ZERO);
+        // 仅领取当前 state 的证明；浏览器关联保留至短期 Cookie 到期，供其他页面继续回调。
         String code = singleParameter(request, "code");
         if (request.getParameterMap().containsKey("error") || !StringUtils.hasText(code) || code.length() > 2048) {
             return false;

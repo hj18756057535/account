@@ -28,6 +28,8 @@ Starter JAR 内含菜单协议、Handler 接口和签名校验实现。它不依
 
 Starter 提供 `GET /login/account` 与 `GET /login/account/callback`，请求 openid/profile。宿主提供 `POST /login/account/exchange`，调用 `AccountOidcLogin.consumeIdentity` 原子领取已校验的 issuer、subject、账号和姓名，自动建档或读取持久关联，再建立本地登录态。只接受当前完整身份结构，不保留未发布版本的 subject 接口或格式兼容。共享 Redis 保存 5 分钟的请求和 1 分钟的身份结果。部署地址、CMS 关联表与验收见 [CMS 部署对接方案](../../docs/application-integration/CMS接入-部署对接方案.md)。
 
+首次未完成登录可以重新发起。短期 HttpOnly 浏览器关联在多次发起之间复用，各次 state、nonce 和 PKCE 证明分别保存并原子领取；完成一个回调不清除其他待完成请求的关联。请求证明过期后需重新从宿主登录入口发起。回调协议失败仅记录错误码，不记录授权码、Cookie、nonce、PKCE 或 Token 内容。
+
 ## 菜单权限 Provider
 
 宿主使用的 Handler、NonceStore、DTO 和协议常量位于 `com.hypers.account.integration.menu`。Controller、校验和响应实现位于 `menu.web`，签名 Filter、签名算法和请求包装位于 `menu.security`。

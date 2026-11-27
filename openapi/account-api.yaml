@@ -387,6 +387,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/session/applications:
+    get:
+      tags: [Session]
+      operationId: getMyApplications
+      summary: 读取当前登录账户可进入的应用
+      description: >-
+        从当前 Session 确定用户，不接受用户 ID。只返回已授权、用户与应用均启用、凭据可用且配置入口的应用；
+        配置 Provider 的应用还须确认当前准入版本。普通登录用户也可读取自己的列表。
+        点击 entryUrl 进入应用自身登录入口，不签发旧式 SSO Ticket，不返回 Secret、回调或后端地址。
+        未登录返回 401，列表为空时返回空数组；响应 no-store。
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 按应用编码排序的当前账户应用入口
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserApplicationEntry' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/session:
     get:
       tags: [Session]
@@ -1235,6 +1257,17 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    UserApplicationEntry:
+      type: object
+      additionalProperties: false
+      required: [appCode, name, entryUrl]
+      properties:
+        appCode: { type: string, description: 当前账户已获准进入的应用编码 }
+        name: { type: string, description: 应用显示名称 }
+        entryUrl:
+          type: string
+          format: uri
+          description: 已登记的 HTTP(S) 应用入口，由应用发起自身登录流程
     OverviewResponse:
       type: object
       required: [sampledAt, failuresSince, counts, recentFailures, insightsEnabled, insights, failureEvents, accountDataStatus, downstreamStatus]

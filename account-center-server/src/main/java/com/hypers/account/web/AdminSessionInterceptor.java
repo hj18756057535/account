@@ -54,6 +54,9 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
     private boolean hasRequiredRole(HttpServletRequest request, AccountSessionUser sessionUser) {
         String userId = sessionUser.getUserId();
         String requestUri = request.getRequestURI();
+        if ("GET".equals(request.getMethod()) && "/api/session/applications".equals(requestUri)) {
+            return true;
+        }
         if (requestUri.matches("/api/users/[^/]+/applications/[^/]+/menu-permissions")) {
             return authorizationService.isAdmin(userId);
         }
@@ -68,6 +71,7 @@ public class AdminSessionInterceptor implements HandlerInterceptor {
 
     private boolean isConsoleApiRequest(String requestUri) {
         return "/api/session".equals(requestUri)
+                || "/api/session/applications".equals(requestUri)
                 || "/api/overview".equals(requestUri)
                 || requestUri.startsWith("/api/user-imports/")
                 || "/api/users".equals(requestUri)

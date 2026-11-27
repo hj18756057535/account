@@ -2,6 +2,7 @@ package com.hypers.account.web.management;
 
 import com.hypers.account.app.exception.BusinessException;
 import com.hypers.account.app.exception.ErrorCode;
+import com.hypers.account.app.service.UserApplicationAccessService;
 import com.hypers.account.auth.AccountLoginService;
 import com.hypers.account.auth.AccountSessionUser;
 import com.hypers.account.auth.AdminAuthorizationService;
@@ -20,6 +21,7 @@ import lombok.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +40,20 @@ public class ManagementSessionController {
     private final CsrfTokenManager csrfTokenManager;
     private final UserImportFeature userImportFeature;
     private final ManagementSecurityAudit securityAudit;
+    private final UserApplicationAccessService applicationAccess;
+
+    /** 只查询当前会话用户可进入的应用，不接受外部用户 ID。 */
+    @GetMapping("/applications")
+    public List<UserApplicationEntry> applications(HttpServletRequest request) {
+        AccountSessionUser user = (AccountSessionUser) request.getSession(false)
+                .getAttribute(AuthController.SESSION_USER_KEY);
+        return applicationAccess.getUserAuthorizedApplications(user.getUserId()).stream()
+                .filter(application -> "active".equals(application.getSecretState()))
+                .filter(application -> StringUtils.hasText(application.getEntryUrl()))
+                .map(application -> new UserApplicationEntry(application.getAppCode(),
+                        application.getName(), application.getEntryUrl()))
+                .toList();
+    }
 
     @GetMapping
     public SessionResponse currentSession(HttpServletRequest request) {
@@ -109,6 +125,17 @@ public class ManagementSessionController {
         @Size(max = 256, message = "validation.password.size")
         private String password;
 
+    }
+
+    @Value
+    public static class UserApplicationEntry {
+
+        /** 当前用户已获准进入的应用编码。 */
+        String appCode;
+        /** 应用显示名称。 */
+        String name;
+        /** 已登记的 HTTP(S) 应用入口，由应用发起自身登录流程。 */
+        String entryUrl;
     }
 
     @Value

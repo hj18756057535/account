@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,6 +34,10 @@ public class AccountOidcLoginController {
         boolean success = false;
         try {
             success = login.complete(request, response);
+        } catch (OAuth2AuthenticationException exception) {
+            String error = exception.getError().getErrorCode();
+            log.warn("Account OIDC callback failed (error={})",
+                    error != null && error.matches("[a-z][a-z0-9_]{0,63}") ? error : "oauth2_error");
         } catch (RuntimeException exception) {
             log.warn("Account OIDC callback failed ({})", exception.getClass().getSimpleName());
         }
